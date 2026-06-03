@@ -1,0 +1,184 @@
+import {
+  pgTable, uuid, text, integer, boolean,
+  timestamp, jsonb, pgEnum, unique, primaryKey, index
+} from 'drizzle-orm/pg-core';
+
+// ---------- Enums ----------
+export const watchTypeEnum = pgEnum('watch_type', ['topic', 'company']);
+export const geoFilterEnum = pgEnum('geo_filter', ['global', 'dach', 'austria']);
+export const aiModelEnum = pgEnum('ai_model', ['claude', 'gemini', 'deepseek']);
+export const sourceTypeEnum = pgEnum('source_type', [
+  'linkedin_post', 'linkedin_company', 'google_news', 'rss', 'newsroom'
+]);
+export const sentimentEnum = pgEnum('sentiment', ['positive', 'negative', 'neutral']);
+export const signalTypeEnum = pgEnum('signal_type', [
+  'product_launch', 'expansion', 'partnership', 'personnel',
+  'funding', 'regulatory', 'earnings', 'general'
+]);
+
+// ---------- Users ----------
+export const users = pgTable('users', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  username: text('username').notNull().unique(),
+  password_hash: text('password_hash').notNull(),
+  email: text('email'),
+  role: text('role').notNull().default('user'),       // 'admin' | 'user'
+  is_active: boolean('is_active').notNull().default(true),
+  created_at: timestamp('created_at').defaultNow()
+});
+
+// ---------- Search Terms (GETEILT, dedupliziert über alle User) ----------
+// Hier läuft jede Suche genau einmal. Mehrere User-Abos zeigen auf dieselbe Zeile.
+export const search_terms = pgTable('search_terms', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  type: watchTypeEnum('type').notNull(),
+  query_normalized: text('query_normalized').notNull(),  // lowercase/trimmed Suchbegriff
+  query_display: text('query_display').notNull(),         // Original-Schreibweise
+  geo_filter: geoFilterEnum('geo_filter').notNull().default('global'),
+
+  // Nur für type='company'
+  company_linkedin_id: text('company_linkedin_id'),
+  company_newsroom_url: text('company_newsroom_url'),
+  company_domain: text('company_domain'),
+
+  // Welche Source-Typen für diesen Begriff abgefragt werden (geteilt)
+  sources_config: jsonb('sources_config').$type<{
+    linkedin_posts: boolean;
+    linkedin_company_page: boolean;
+    google_news: boolean;
+    rss: boolean;
+    newsroom: boolean;
+  }>().notNull().default({
+    linkedin_posts: true, linkedin_company_page: false,
+    google_news: true, rss: true, newsroom: false
+  }),
+
+  is_active: boolean('is_active').notNull().default(true),  // true wenn ≥1 aktives Abo
+  last_run_at: timestamp('last_run_at'),
+  created_at: timestamp('created_at').defaultNow()
+}, (t) => ({
+  // DEDUP-KERN: ein Suchbegriff existiert nur einmal pro (Typ, Query, Geo)
+  uniqTerm: unique('uniq_search_term').on(t.type, t.query_normalized, t.geo_filter),
+  activeIdx: index('idx_search_terms_active').on(t.is_active)
+}));
+
+// ---------- Watch Items (USER-ABO auf einen search_term) ----------
+export const watch_items = pgTable('watch_items', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  user_id: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  search_term_id: uuid('search_term_id').notNull().references(() => search_terms.id, { onDelete: 'restrict' }),
+
+  display_name: text('display_name').notNull(),  // wie der User es nennt
+  label: text('label'),                          // Kategorie z.B. "Wettbewerber"
+  color: text('color').default('#3B82F6'),
+  is_active: boolean('is_active').notNull().default(true),
+  created_at: timestamp('created_at').defaultNow()
+}, (t) => ({
+  uniqSub: unique('uniq_user_term').on(t.user_id, t.search_term_id),
+  userIdx: index('idx_watch_items_user').on(t.user_id, t.is_active)
+}));
+
+// ---------- Articles (GLOBAL, dedupliziert per content_hash) ----------
+// Reiner Content – keine Klassifikation, kein User.
+export const articles = pgTable('articles', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  content_hash: text('content_hash').notNull().unique(),  // MD5(normalisierte URL)
+  source_url: text('source_url').notNull(),
+  source_type: sourceTypeEnum('source_type').notNull(),
+  source_name: text('source_name'),
+  original_title: text('original_title'),
+  raw_excerpt: text('raw_excerpt'),               // gekürzter Originaltext (für Re-Klassifikation)
+  author: text('author'),
+  reactions: integer('reactions').default(0),     // LinkedIn-Engagement
+  published_at: timestamp('published_at'),
+  created_at: timestamp('created_at').defaultNow()
+}, (t) => ({
+  publishedIdx: index('idx_articles_published').on(t.published_at.desc())
+}));
+
+// ---------- Classifications (Artikel × search_term, dedupliziert) ----------
+// Derselbe Artikel kann von mehreren search_terms gefunden & unterschiedlich bewertet werden.
+export const classifications = pgTable('classifications', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  article_id: uuid('article_id').notNull().references(() => articles.id, { onDelete: 'cascade' }),
+  search_term_id: uuid('search_term_id').notNull().references(() => search_terms.id, { onDelete: 'cascade' }),
+
+  title: text('title').notNull(),               // Executive Headline (Deutsch)
+  summary: text('summary').notNull(),           // 3 Bullet Points
+  rank: integer('rank').notNull(),              // 1 | 2 | 3
+  rank_reason: text('rank_reason'),
+  sentiment: sentimentEnum('sentiment'),
+  tags: jsonb('tags').$type<string[]>().default([]),
+  signal_type: signalTypeEnum('signal_type'),   // nur bei type='company' gesetzt
+
+  ai_model_used: text('ai_model_used'),
+  created_at: timestamp('created_at').defaultNow()
+}, (t) => ({
+  uniqClass: unique('uniq_article_term').on(t.article_id, t.search_term_id),
+  termRankIdx: index('idx_classifications_term_rank').on(t.search_term_id, t.rank, t.created_at.desc()),
+  articleIdx: index('idx_classifications_article').on(t.article_id)
+}));
+
+// ---------- User Article State (Lese-Status/Bookmark/Push, pro User) ----------
+export const user_article_state = pgTable('user_article_state', {
+  user_id: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  classification_id: uuid('classification_id').notNull().references(() => classifications.id, { onDelete: 'cascade' }),
+
+  is_read: boolean('is_read').default(false),
+  is_bookmarked: boolean('is_bookmarked').default(false),
+  user_rank_override: integer('user_rank_override'),
+  telegram_sent: boolean('telegram_sent').default(false),
+  telegram_sent_at: timestamp('telegram_sent_at'),
+  updated_at: timestamp('updated_at').defaultNow()
+}, (t) => ({
+  pk: primaryKey({ columns: [t.user_id, t.classification_id] })
+}));
+
+// ---------- RSS Sources (global, Admin-verwaltet) ----------
+export const rss_sources = pgTable('rss_sources', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  url: text('url').notNull().unique(),
+  category: text('category').notNull(),
+  // 'global_tech'|'global_finance'|'global_fintech'|'dach'|'austria'|'regulatory'
+  language: text('language').default('en'),
+  is_active: boolean('is_active').default(true),
+  last_ok_at: timestamp('last_ok_at'),            // letzter erfolgreicher Fetch
+  last_error: text('last_error'),                 // letzter Fehler (für Health-Anzeige)
+  created_at: timestamp('created_at').defaultNow()
+});
+
+// ---------- Settings (pro User) ----------
+export const settings = pgTable('settings', {
+  user_id: uuid('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+
+  ai_model: aiModelEnum('ai_model').notNull().default('claude'),
+  ai_model_variant: text('ai_model_variant').default('claude-sonnet-4-20250514'),
+
+  telegram_chat_id: text('telegram_chat_id'),
+  telegram_connected: boolean('telegram_connected').default(false),
+  notify_rank_1: boolean('notify_rank_1').default(true),
+  notify_rank_2: boolean('notify_rank_2').default(false),
+
+  newsletter_email: text('newsletter_email'),
+  newsletter_enabled: boolean('newsletter_enabled').default(false),
+  newsletter_day: text('newsletter_day').default('monday'),
+  newsletter_time: text('newsletter_time').default('07:00'),
+  newsletter_last_sent: timestamp('newsletter_last_sent'),
+
+  updated_at: timestamp('updated_at').defaultNow()
+});
+
+// ---------- Job Runs (Observability + Run-Status-Polling) ----------
+export const job_runs = pgTable('job_runs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  search_term_id: uuid('search_term_id').references(() => search_terms.id),
+  trigger: text('trigger'),                       // 'scheduled' | 'manual'
+  status: text('status').notNull().default('running'), // 'running'|'success'|'error'
+  articles_found: integer('articles_found').default(0),
+  articles_new: integer('articles_new').default(0),
+  classifications_new: integer('classifications_new').default(0),
+  error_message: text('error_message'),
+  started_at: timestamp('started_at').defaultNow(),
+  completed_at: timestamp('completed_at')
+});
