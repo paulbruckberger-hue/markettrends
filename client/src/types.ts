@@ -74,6 +74,26 @@ export interface FeedResponse {
   hasMore: boolean;
 }
 
+export type AiModel = 'claude' | 'gemini' | 'deepseek';
+
+export interface AppSettings {
+  user_id: string;
+  ai_model: AiModel;
+  ai_model_variant: string | null;
+  telegram_chat_id: string | null;
+  telegram_connected: boolean | null;
+  notify_rank_1: boolean | null;
+  notify_rank_2: boolean | null;
+  newsletter_email: string | null;
+  newsletter_enabled: boolean | null;
+  newsletter_day: string | null;
+  newsletter_time: string | null;
+  newsletter_last_sent: string | null;
+  telegram_bot_username: string | null;
+  keys: { claude: boolean; gemini: boolean; deepseek: boolean };
+  smtp_configured: boolean;
+}
+
 export interface Overview {
   total: number;
   watchCount: number;

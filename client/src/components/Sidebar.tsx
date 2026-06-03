@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { BarChart3, Eye, LineChart, LogOut, Newspaper, Radar } from 'lucide-react';
+import { BarChart3, Eye, LineChart, LogOut, Newspaper, Radar, Settings } from 'lucide-react';
 import { useMe, useLogout } from '../hooks/useAuth';
 
 const linkBase =
@@ -51,6 +51,14 @@ export default function Sidebar() {
           }
         >
           <LineChart size={18} /> Intelligence
+        </NavLink>
+        <NavLink
+          to="/settings"
+          className={({ isActive }) =>
+            `${linkBase} ${isActive ? 'bg-accent-600/20 text-accent-300' : 'text-slate-300 hover:bg-ink-800'}`
+          }
+        >
+          <Settings size={18} /> Einstellungen
         </NavLink>
       </nav>
 

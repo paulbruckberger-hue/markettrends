@@ -20,12 +20,32 @@ Begriff genau einmal; user-spezifisch sind nur Abo, Lese-Status, Bookmarks, Push
 
 ## Status
 
-**Meilenstein 1 (vertikaler Schnitt) – fertig:**
-Supabase + Google News + Claude, Auth (JWT), Watch-List CRUD inkl. Dedup-Logik,
-Collector + Job-Entrypoint, Feed (Join-Query), Minimal-Frontend (Login / Beobachtungen / Feed).
+**Meilenstein 1 – fertig & lokal verifiziert:** Supabase + Google News + Claude,
+Auth (JWT), Watch-List CRUD inkl. Dedup-Logik, Collector + Job-Entrypoint,
+Feed (Join-Query), Frontend (Login / Beobachtungen / Feed).
 
-Offen: Meilenstein 2 (RSS + Apify-LinkedIn + Gemini/DeepSeek + Geo-Filter + Analytics),
-Meilenstein 3 (Telegram + Newsletter + Settings-Page + GCP-Deploy).
+**Meilenstein 2 – fertig & lokal verifiziert:** RSS-Quelle (geo-gefiltert,
+Per-Feed-Health), Apify-LinkedIn (`harvestapi/linkedin-post-search`: Topic +
+Company-Page), Newsroom-Feeds, Gemini + DeepSeek (REST), Geo-Filter,
+Analytics-Routen + Dashboard- und Intelligence-Seiten (Recharts).
+
+**Meilenstein 3 – Code fertig, lokal verifiziert (außer Live-Telegram/SMTP):**
+Telegram-Service + Webhook + Notifications-Fan-out (pro User), Newsletter
+(HTML-Template + AI-Summary + SMTP) + Job, Settings-Seite + -Routen
+(AI-Modell, Telegram-Connect, Newsletter, RSS-Health).
+
+**Offen:** GCP-Deploy ausführen (Cloud Run Service + 2 Jobs + Scheduler +
+Firebase Hosting) – braucht GCP-Login + Apify/Telegram/SMTP-Keys. Anleitung:
+[docs/02_Markttrends_Scouting_Deployment_Guide.md](docs/02_Markttrends_Scouting_Deployment_Guide.md),
+Update-Deploys via [cloudbuild.yaml](cloudbuild.yaml).
+
+### Noch benötigte Keys (für die jeweiligen Features)
+| Variable | Feature |
+|----------|---------|
+| `APIFY_API_TOKEN` | LinkedIn-Quellen (Topic + Company Page) |
+| `TELEGRAM_BOT_TOKEN` + `TELEGRAM_BOT_USERNAME` | Push-Benachrichtigungen |
+| `SMTP_USER` + `SMTP_PASS` | Newsletter-Versand |
+| `GEMINI_API_KEY` / `DEEPSEEK_API_KEY` | optionale KI-Modelle |
 
 ## Voraussetzungen
 

@@ -175,3 +175,13 @@ export async function classify(
   }
   return parseClassificationJson(raw, input);
 }
+
+/** Free-form text generation (e.g. newsletter summary). Returns raw text. */
+export async function generateText(prompt: string, model: AiModel, variant?: string): Promise<string> {
+  switch (model) {
+    case 'claude': return classifyWithClaude(prompt, variant);
+    case 'gemini': return classifyWithGemini(prompt, variant);
+    case 'deepseek': return classifyWithDeepseek(prompt, variant);
+    default: throw new Error(`AI model '${model}' is not implemented`);
+  }
+}

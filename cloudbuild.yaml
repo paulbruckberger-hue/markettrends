@@ -1,0 +1,49 @@
+# Update-Deploy Pipeline (Build → Push → Cloud Run Service + Jobs).
+# Voraussetzung: Service + Jobs wurden einmalig laut docs/02 mit Secrets/Env angelegt.
+# Erst-Setup macht der Deployment-Guide; diese Pipeline ist für Folge-Deploys.
+#
+#   gcloud builds submit --config cloudbuild.yaml \
+#     --substitutions=_REGION=europe-west1,_REPO=markttrends,_PROJECT=$PROJECT_ID
+
+substitutions:
+  _REGION: europe-west1
+  _REPO: markttrends
+  _SERVICE: markttrends-api
+  _COLLECTOR: markttrends-collector
+  _NEWSLETTER: markttrends-newsletter
+
+steps:
+  # Build image from ./server (Dockerfile context)
+  - name: gcr.io/cloud-builders/docker
+    args: ['build', '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/app:$SHORT_SHA',
+           '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/app:latest', './server']
+
+  - name: gcr.io/cloud-builders/docker
+    args: ['push', '--all-tags', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/app']
+
+  # Deploy API service (keeps existing env/secrets)
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args: ['run', 'deploy', '${_SERVICE}',
+           '--image', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/app:$SHORT_SHA',
+           '--region', '${_REGION}']
+
+  # Update jobs to the new image
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args: ['run', 'jobs', 'update', '${_COLLECTOR}',
+           '--image', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/app:$SHORT_SHA',
+           '--region', '${_REGION}']
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args: ['run', 'jobs', 'update', '${_NEWSLETTER}',
+           '--image', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/app:$SHORT_SHA',
+           '--region', '${_REGION}']
+
+images:
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/app:$SHORT_SHA'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/app:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY

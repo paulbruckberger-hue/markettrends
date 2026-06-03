@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "dev:collect": "tsx src/jobs/collect.ts",
-    "build": "tsc",
+    "build": "tsc && cp -r src/templates dist/templates",
     "start": "node dist/index.js",
     "collect": "node dist/jobs/collect.js",
     "newsletter": "node dist/jobs/sendNewsletters.js",
@@ -24,8 +24,10 @@
     "express": "^4.21.2",
     "express-rate-limit": "^7.4.1",
     "google-auth-library": "^9.15.0",
+    "handlebars": "^4.7.8",
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^6.9.16",
     "pg": "^8.13.1",
     "rss-parser": "^3.13.0"
   },
@@ -35,6 +37,7 @@
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^20.17.6",
+    "@types/nodemailer": "^6.4.16",
     "@types/pg": "^8.11.10",
     "drizzle-kit": "^0.28.1",
     "tsx": "^4.19.2",

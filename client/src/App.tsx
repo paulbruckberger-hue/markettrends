@@ -6,6 +6,7 @@ import DashboardPage from './pages/DashboardPage';
 import FeedPage from './pages/FeedPage';
 import WatchListPage from './pages/WatchListPage';
 import IntelligencePage from './pages/IntelligencePage';
+import SettingsPage from './pages/SettingsPage';
 
 function Protected({ children }: { children: ReactNode }) {
   return isLoggedIn() ? <>{children}</> : <Navigate to="/login" replace />;
@@ -19,6 +20,7 @@ export default function App() {
       <Route path="/feed" element={<Protected><FeedPage /></Protected>} />
       <Route path="/watchlist" element={<Protected><WatchListPage /></Protected>} />
       <Route path="/intelligence" element={<Protected><IntelligencePage /></Protected>} />
+      <Route path="/settings" element={<Protected><SettingsPage /></Protected>} />
       <Route path="*" element={<Navigate to={isLoggedIn() ? '/dashboard' : '/login'} replace />} />
     </Routes>
   );

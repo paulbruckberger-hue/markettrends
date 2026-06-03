@@ -9,6 +9,7 @@ import { fetchRssArticles, fetchSingleFeed } from './sources/rssFeeds';
 import { fetchLinkedInPosts } from './sources/apifyLinkedIn';
 import { fetchCompanyPagePosts } from './sources/apifyCompanyPage';
 import { apifyEnabled } from './sources/apifyClient';
+import { fanOutForTerm } from './notifications';
 import { SourceArticle } from './sources/types';
 import { GeoFilter, WatchType } from '../types';
 
@@ -196,6 +197,13 @@ export async function collectForSearchTerm(
     }).where(eq(job_runs.id, run.id));
 
     await db.update(search_terms).set({ last_run_at: new Date() }).where(eq(search_terms.id, term.id));
+
+    // Notifications fan-out per subscriber (idempotent via telegram_sent).
+    try {
+      await fanOutForTerm(term.id);
+    } catch (err) {
+      console.error(`[collector] notification fan-out failed for term ${term.id}:`, err instanceof Error ? err.message : err);
+    }
   } catch (err) {
     summary.status = 'error';
     summary.error_message = err instanceof Error ? err.message : String(err);
