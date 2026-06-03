@@ -1,4 +1,6 @@
 import { classifyWithClaude } from './claude';
+import { classifyWithGemini } from './gemini';
+import { classifyWithDeepseek } from './deepseek';
 
 export type AiModel = 'claude' | 'gemini' | 'deepseek';
 
@@ -162,9 +164,14 @@ export async function classify(
     case 'claude':
       raw = await classifyWithClaude(prompt, variant);
       break;
-    // gemini + deepseek follow in Meilenstein 2.
+    case 'gemini':
+      raw = await classifyWithGemini(prompt, variant);
+      break;
+    case 'deepseek':
+      raw = await classifyWithDeepseek(prompt, variant);
+      break;
     default:
-      throw new Error(`AI model '${model}' is not implemented yet`);
+      throw new Error(`AI model '${model}' is not implemented`);
   }
   return parseClassificationJson(raw, input);
 }

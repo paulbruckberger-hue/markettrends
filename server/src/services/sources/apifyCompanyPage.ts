@@ -1,0 +1,27 @@
+import { runActorSync } from './apifyClient';
+import { mapLinkedInPost, LINKEDIN_POST_ACTOR } from './apifyLinkedIn';
+import { SourceArticle } from './types';
+
+type LiPost = Record<string, unknown>;
+
+function toCompanyUrl(companyLinkedinId: string): string {
+  const id = companyLinkedinId.trim();
+  if (id.startsWith('http')) return id;
+  return `https://www.linkedin.com/company/${id}`;
+}
+
+/**
+ * Company-page posts: everything authored by the company. Marked prefiltered
+ * (by definition on-topic, so no token pre-filter is applied).
+ */
+export async function fetchCompanyPagePosts(companyLinkedinId: string, limit = 10): Promise<SourceArticle[]> {
+  const items = await runActorSync<LiPost>(LINKEDIN_POST_ACTOR, {
+    authorUrls: [toCompanyUrl(companyLinkedinId)],
+    maxPosts: limit,
+    postedLimit: 'week',
+    sortBy: 'date',
+  });
+  return items
+    .map((p) => mapLinkedInPost(p, 'linkedin_company', true))
+    .filter((a): a is SourceArticle => a !== null);
+}

@@ -74,6 +74,43 @@ export interface FeedResponse {
   hasMore: boolean;
 }
 
+export interface Overview {
+  total: number;
+  watchCount: number;
+  byRank: Record<string, number>;
+  bySource: { source_type: SourceTypeName; n: number }[];
+  bySentiment: Record<string, number>;
+  volume: { date: string; n: number }[];
+  read: number;
+  bookmarked: number;
+}
+
+export interface WatchAnalytics {
+  watchItem: { id: string; display_name: string; type: WatchType };
+  volume: { date: string; n: number }[];
+  sentiment: Record<string, number>;
+  topSources: { source: string; n: number }[];
+  topAuthors: { author: string; n: number }[];
+  coTags: { tag: string; n: number }[];
+  signalTypes: { signal_type: SignalType; n: number }[];
+}
+
+export interface RssSourceHealth {
+  id: string;
+  name: string;
+  url: string;
+  category: string;
+  language: string | null;
+  is_active: boolean | null;
+  last_ok_at: string | null;
+  last_error: string | null;
+}
+
+export interface SourcesResponse {
+  bySource: { source_type: SourceTypeName; n: number }[];
+  feeds: RssSourceHealth[];
+}
+
 export interface RunStatus {
   status: 'idle' | 'running' | 'success' | 'error';
   articles_found?: number;

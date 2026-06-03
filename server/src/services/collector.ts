@@ -5,8 +5,15 @@ import { contentHash } from '../lib/hash';
 import { matchesQuery } from '../lib/matchesQuery';
 import { classify, AiModel, ClassificationInput } from './ai/classifier';
 import { fetchGoogleNews } from './sources/googleNews';
+import { fetchRssArticles, fetchSingleFeed } from './sources/rssFeeds';
+import { fetchLinkedInPosts } from './sources/apifyLinkedIn';
+import { fetchCompanyPagePosts } from './sources/apifyCompanyPage';
+import { apifyEnabled } from './sources/apifyClient';
 import { SourceArticle } from './sources/types';
 import { GeoFilter, WatchType } from '../types';
+
+// Soft cap on AI calls per term per run to protect the API budget.
+const MAX_NEW_CLASSIFICATIONS_PER_RUN = 30;
 
 export interface RunSummary {
   jobRunId: string;
@@ -33,22 +40,41 @@ async function getActiveAiConfig(): Promise<{ model: AiModel; variant?: string }
   return { model: 'claude' };
 }
 
+function logSourceError(source: string, term: SearchTermRow, err: unknown): void {
+  console.error(`[collector] ${source} failed for "${term.query_display}":`, err instanceof Error ? err.message : err);
+}
+
 /** Gather raw candidates from every enabled + implemented source for a term. */
 async function gatherCandidates(term: SearchTermRow): Promise<SourceArticle[]> {
   const out: SourceArticle[] = [];
   const cfg = term.sources_config;
   const geo = term.geo_filter as GeoFilter;
+  const isCompany = term.type === 'company';
 
   if (cfg.google_news) {
-    try {
-      const gn = await fetchGoogleNews(term.query_display, geo);
-      out.push(...gn);
-    } catch (err) {
-      console.error(`[collector] google_news failed for "${term.query_display}":`, err instanceof Error ? err.message : err);
-    }
+    try { out.push(...await fetchGoogleNews(term.query_display, geo)); }
+    catch (err) { logSourceError('google_news', term, err); }
   }
 
-  // rss / linkedin_posts / linkedin_company_page / newsroom → Meilenstein 2.
+  if (cfg.rss) {
+    try { out.push(...await fetchRssArticles(geo)); }
+    catch (err) { logSourceError('rss', term, err); }
+  }
+
+  if (cfg.linkedin_posts && apifyEnabled()) {
+    try { out.push(...await fetchLinkedInPosts(term.query_display)); }
+    catch (err) { logSourceError('linkedin_posts', term, err); }
+  }
+
+  if (cfg.linkedin_company_page && isCompany && term.company_linkedin_id && apifyEnabled()) {
+    try { out.push(...await fetchCompanyPagePosts(term.company_linkedin_id)); }
+    catch (err) { logSourceError('linkedin_company_page', term, err); }
+  }
+
+  if (cfg.newsroom && isCompany && term.company_newsroom_url) {
+    try { out.push(...await fetchSingleFeed(term.company_newsroom_url, `${term.query_display} Newsroom`, 'newsroom')); }
+    catch (err) { logSourceError('newsroom', term, err); }
+  }
 
   return out;
 }
@@ -84,13 +110,20 @@ export async function collectForSearchTerm(
     const seen = new Set<string>();
 
     for (const cand of candidates) {
+      if (summary.classifications_new >= MAX_NEW_CLASSIFICATIONS_PER_RUN) {
+        console.log(`[collector] reached cap of ${MAX_NEW_CLASSIFICATIONS_PER_RUN} new classifications for "${term.query_display}"`);
+        break;
+      }
       const hash = contentHash(cand.source_url);
       if (seen.has(hash)) continue;
       seen.add(hash);
 
-      // Pre-filter (token-based). Newsroom/company-page sources skip this.
-      const haystack = `${cand.title} ${cand.excerpt ?? ''}`;
-      if (!matchesQuery(term.query_normalized, haystack, watchType)) continue;
+      // Pre-filter (token-based). Inherently on-topic sources (company page /
+      // newsroom) carry prefiltered=true and skip this.
+      if (!cand.prefiltered) {
+        const haystack = `${cand.title} ${cand.excerpt ?? ''}`;
+        if (!matchesQuery(term.query_normalized, haystack, watchType)) continue;
+      }
 
       // --- Upsert article (global dedup on content_hash) ---
       const inserted = await db.insert(articles).values({

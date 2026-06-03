@@ -10,4 +10,6 @@ export interface SourceArticle {
   author?: string;
   reactions?: number;
   published_at?: Date | null;
+  /** true if the source is inherently on-topic (company page / newsroom) → skip token pre-filter. */
+  prefiltered?: boolean;
 }
