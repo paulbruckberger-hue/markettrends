@@ -9,12 +9,14 @@
 - **Cloud Run Service** `markttrends-api` – serviert API **und** das React-Frontend (eine URL).
 - **Cloud Run Jobs** `markttrends-collector`, `markttrends-newsletter`.
 - **Cloud Scheduler** `markttrends-collect` (alle 6h), `markttrends-newsletter` (täglich 05:00 Europe/Vienna).
-- **Secrets:** DATABASE_URL, JWT_SECRET, ANTHROPIC_API_KEY, TELEGRAM_WEBHOOK_SECRET.
+- **Secrets:** DATABASE_URL, JWT_SECRET, ANTHROPIC_API_KEY, TELEGRAM_WEBHOOK_SECRET,
+  **APIFY_API_TOKEN, GEMINI_API_KEY, DEEPSEEK_API_KEY** (alle gesetzt & live getestet).
 - **DB:** Supabase (Session Pooler, eu-west-1) – läuft, Migrationen + Seed beim Start.
 
-Aktive Quellen ohne weitere Keys: **Google News + RSS (18 Feeds) + Claude**.
+Aktive Quellen: **Google News + RSS (18 Feeds) + LinkedIn (Apify) + Claude**.
+KI-Modelle wählbar: **Claude / Gemini (gemini-2.5-flash, via x-goog-api-key Header) / DeepSeek** – alle drei live ok.
 
-## Noch nachzurüsten (Feature aktiv, sobald Key gesetzt)
+## Noch nachzurüsten (Feature aktiv, sobald Key gesetzt) — verbleibend: Telegram + SMTP
 Runtime-SA: `281138265305-compute@developer.gserviceaccount.com`
 Region: `europe-west1`
 
