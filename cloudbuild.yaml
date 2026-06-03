@@ -13,10 +13,10 @@ substitutions:
   _NEWSLETTER: markttrends-newsletter
 
 steps:
-  # Build image from ./server (Dockerfile context)
+  # Build image from repo root (root Dockerfile bundles client SPA + server)
   - name: gcr.io/cloud-builders/docker
     args: ['build', '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/app:$SHORT_SHA',
-           '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/app:latest', './server']
+           '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/app:latest', '.']
 
   - name: gcr.io/cloud-builders/docker
     args: ['push', '--all-tags', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/app']

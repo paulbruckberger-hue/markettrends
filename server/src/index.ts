@@ -1,3 +1,4 @@
+import path from 'path';
 import express, { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -58,6 +59,15 @@ async function start(): Promise<void> {
 
   // 404 for unknown API routes
   app.use('/api', (_req, res) => res.status(404).json({ error: 'Route nicht gefunden' }));
+
+  // Static frontend (SPA) — served from the same service when a build is present.
+  const clientDir = process.env.CLIENT_DIR || path.join(__dirname, '../client-dist');
+  app.use(express.static(clientDir));
+  app.get('*', (_req: Request, res: Response) => {
+    res.sendFile(path.join(clientDir, 'index.html'), (err) => {
+      if (err) res.status(404).json({ error: 'Nicht gefunden' });
+    });
+  });
 
   // Central error handler
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
