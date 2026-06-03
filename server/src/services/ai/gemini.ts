@@ -1,7 +1,7 @@
 import { config } from '../../config';
 import { withRetry } from '../../lib/retry';
 
-const DEFAULT_VARIANT = 'gemini-2.0-flash';
+const DEFAULT_VARIANT = 'gemini-2.5-flash';
 
 function resolveModel(variant?: string): string {
   return variant && variant.startsWith('gemini') ? variant : DEFAULT_VARIANT;
@@ -11,16 +11,19 @@ interface GeminiResponse {
   candidates?: { content?: { parts?: { text?: string }[] } }[];
 }
 
-/** Calls Google Gemini (REST) and returns the raw text response. */
+/**
+ * Calls Google Gemini (REST) and returns the raw text response.
+ * Auth via the x-goog-api-key header (more robust across key types than ?key=).
+ */
 export async function classifyWithGemini(prompt: string, variant?: string): Promise<string> {
   if (!config.geminiApiKey) throw new Error('GEMINI_API_KEY is not configured');
   const model = resolveModel(variant);
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${config.geminiApiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
   return withRetry(async () => {
     const resp = await fetch(url, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': config.geminiApiKey },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { temperature: 0.2, maxOutputTokens: 1024 },

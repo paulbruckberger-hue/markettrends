@@ -12,7 +12,7 @@ import { formatDateTime } from '../lib/labels';
 
 const DEFAULT_VARIANTS: Record<AiModel, string> = {
   claude: 'claude-sonnet-4-20250514',
-  gemini: 'gemini-2.0-flash',
+  gemini: 'gemini-2.5-flash',
   deepseek: 'deepseek-chat',
 };
 const DAYS: { v: string; l: string }[] = [
