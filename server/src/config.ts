@@ -1,4 +1,9 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+
+// override:true lets the local .env win over stray/empty shell variables
+// (e.g. an empty ANTHROPIC_API_KEY exported by the surrounding shell).
+// In production no .env file is shipped, so real env vars (Secret Manager) are used.
+dotenv.config({ override: true });
 
 /**
  * Central, typed access to environment variables.
