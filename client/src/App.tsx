@@ -21,7 +21,7 @@ export default function App() {
       <Route path="/watchlist" element={<Protected><WatchListPage /></Protected>} />
       <Route path="/intelligence" element={<Protected><IntelligencePage /></Protected>} />
       <Route path="/settings" element={<Protected><SettingsPage /></Protected>} />
-      <Route path="*" element={<Navigate to={isLoggedIn() ? '/dashboard' : '/login'} replace />} />
+      <Route path="*" element={<Navigate to={isLoggedIn() ? '/feed' : '/login'} replace />} />
     </Routes>
   );
 }

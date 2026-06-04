@@ -64,6 +64,7 @@ export default function SettingsPage() {
   const { data: feeds } = useRssSources();
   const toggleRss = useToggleRss();
 
+  const [language, setLanguage] = useState<'de' | 'en'>('de');
   const [aiModel, setAiModel] = useState<AiModel>('claude');
   const [variant, setVariant] = useState('');
   const [notify1, setNotify1] = useState(true);
@@ -75,6 +76,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (!settings) return;
+    setLanguage((settings.language ?? 'de') as 'de' | 'en');
     setAiModel(settings.ai_model);
     setVariant(settings.ai_model_variant ?? DEFAULT_VARIANTS[settings.ai_model]);
     setNotify1(!!settings.notify_rank_1);
@@ -88,6 +90,7 @@ export default function SettingsPage() {
   const onModelChange = (m: AiModel) => { setAiModel(m); setVariant(DEFAULT_VARIANTS[m]); };
 
   const save = () => update.mutate({
+    language,
     ai_model: aiModel, ai_model_variant: variant,
     notify_rank_1: notify1, notify_rank_2: notify2,
     newsletter_enabled: nlEnabled, newsletter_email: nlEmail, newsletter_day: nlDay, newsletter_time: nlTime,
@@ -110,6 +113,31 @@ export default function SettingsPage() {
       {isLoading && <div className="text-slate-400">Lade …</div>}
       {settings && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+
+          {/* SPRACHE */}
+          <Section title="Sprache / Language">
+            <p className="mb-4 text-sm text-slate-400">
+              Steuert die Sprache der App und der KI-generierten Artikel-Zusammenfassungen.
+              Neue Artikel werden in der gewählten Sprache zusammengefasst.
+            </p>
+            <div className="flex gap-3">
+              {([
+                { v: 'de', flag: '🇩🇪', label: 'Deutsch' },
+                { v: 'en', flag: '🇬🇧', label: 'English' },
+              ] as const).map(({ v, flag, label }) => (
+                <button key={v} onClick={() => setLanguage(v)}
+                  className={`flex-1 flex flex-col items-center gap-1 rounded-xl border py-4 text-sm font-medium transition ${
+                    language === v
+                      ? 'border-accent-500 bg-accent-600/15 text-accent-200'
+                      : 'border-ink-700 text-slate-300 hover:bg-ink-800'
+                  }`}>
+                  <span className="text-2xl">{flag}</span>
+                  <span>{label}</span>
+                  {language === v && <span className="text-xs text-accent-400">Aktiv</span>}
+                </button>
+              ))}
+            </div>
+          </Section>
 
           {/* AI MODEL */}
           <Section title="KI-Modell">

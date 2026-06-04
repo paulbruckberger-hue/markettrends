@@ -48,14 +48,14 @@ export default function DashboardPage() {
 
       {data && (
         <div className="space-y-6">
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Stat icon={<Newspaper size={16} />} label="Signale gesamt" value={data.total} />
             <Stat icon={<Eye size={16} />} label="Aktive Beobachtungen" value={data.watchCount} />
             <Stat icon={<CheckCircle2 size={16} />} label="Gelesen" value={data.read} />
             <Stat icon={<BookmarkCheck size={16} />} label="Lesezeichen" value={data.bookmarked} />
           </div>
 
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <div className="lg:col-span-2">
               <Panel title="Volumen (letzte 14 Tage)">
                 <div style={{ height: 240 }}>

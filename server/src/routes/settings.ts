@@ -51,6 +51,7 @@ settingsRouter.put('/', async (req: AuthedRequest, res: Response) => {
   if (typeof b.newsletter_email === 'string') patch.newsletter_email = b.newsletter_email;
   if (typeof b.newsletter_day === 'string') patch.newsletter_day = b.newsletter_day;
   if (typeof b.newsletter_time === 'string') patch.newsletter_time = b.newsletter_time;
+  if (b.language === 'de' || b.language === 'en') patch.language = b.language;
 
   await ensureSettings(req.user!.id);
   const [updated] = await db.update(settings).set(patch).where(eq(settings.user_id, req.user!.id)).returning();

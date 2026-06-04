@@ -45,21 +45,20 @@ export default function IntelligencePage() {
   const maxSource = Math.max(1, ...(data?.topSources.map((s) => s.n) ?? [1]));
 
   return (
-    <Layout
-      title="Intelligence"
-      subtitle="Tiefenanalyse je Beobachtung"
-      actions={
-        <select value={selectedId} onChange={(e) => setSelectedId(e.target.value)} className="select">
-          {watchlist?.map((w) => <option key={w.id} value={w.id}>{w.display_name}</option>)}
-        </select>
-      }
-    >
+    <Layout title="Intelligence" subtitle="Tiefenanalyse je Beobachtung">
+      {watchlist && watchlist.length > 1 && (
+        <div className="mb-4">
+          <select value={selectedId} onChange={(e) => setSelectedId(e.target.value)} className="select w-full max-w-xs">
+            {watchlist.map((w) => <option key={w.id} value={w.id}>{w.display_name}</option>)}
+          </select>
+        </div>
+      )}
       {!selectedId && <div className="text-slate-400">Lege zuerst eine Beobachtung an.</div>}
       {selectedId && isLoading && <div className="text-slate-400">Lade …</div>}
 
       {data && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <Panel title="Volumen (30 Tage)" className="lg:col-span-2">
               <div style={{ height: 220 }}>
                 <ResponsiveContainer width="100%" height="100%">
@@ -92,7 +91,7 @@ export default function IntelligencePage() {
             </Panel>
           </div>
 
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <Panel title="Top-Quellen">
               {data.topSources.length === 0 ? (
                 <div className="text-sm text-slate-500">Keine Daten</div>

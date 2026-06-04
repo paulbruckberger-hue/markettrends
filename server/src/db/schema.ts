@@ -166,6 +166,8 @@ export const settings = pgTable('settings', {
   newsletter_time: text('newsletter_time').default('07:00'),
   newsletter_last_sent: timestamp('newsletter_last_sent'),
 
+  language: text('language').notNull().default('de'),  // 'de' | 'en'
+
   updated_at: timestamp('updated_at').defaultNow()
 });
 

@@ -30,36 +30,34 @@ export default function FeedPage() {
 
   return (
     <Layout title="Feed" subtitle="Klassifizierte Markttrends aus deinen Beobachtungen">
-      <div className="mb-6 flex flex-wrap items-center gap-3">
-        <div className="relative">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+      {/* Filters — scroll horizontally on mobile */}
+      <div className="mb-4 flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 md:mx-0 md:px-0 md:flex-wrap md:pb-0">
+        <div className="relative shrink-0">
+          <Search size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Suchen …"
-            className="w-56 rounded-lg border border-ink-700 bg-ink-850 py-2 pl-9 pr-3 text-sm text-slate-100 outline-none focus:border-accent-500"
+            className="w-40 md:w-56 rounded-lg border border-ink-700 bg-ink-850 py-2 pl-8 pr-3 text-sm text-slate-100 outline-none focus:border-accent-500"
           />
         </div>
-
-        <select value={rank} onChange={(e) => setRank(Number(e.target.value))} className="select">
+        <select value={rank} onChange={(e) => setRank(Number(e.target.value))} className="select shrink-0">
           <option value={0}>Alle Ränge</option>
-          <option value={1}>Rang 1</option>
-          <option value={2}>Rang 2</option>
+          <option value={1}>Rang 1 🔴</option>
+          <option value={2}>Rang 2 🟠</option>
           <option value={3}>Rang 3</option>
         </select>
-
-        <select value={watchItemId} onChange={(e) => setWatchItemId(e.target.value)} className="select">
+        <select value={watchItemId} onChange={(e) => setWatchItemId(e.target.value)} className="select shrink-0 max-w-[180px]">
           <option value="">Alle Beobachtungen</option>
           {watchlist?.map((w) => (
             <option key={w.id} value={w.id}>{w.display_name}</option>
           ))}
         </select>
-
-        <select value={period} onChange={(e) => setPeriod(e.target.value)} className="select">
-          <option value="">Gesamter Zeitraum</option>
-          <option value="24h">Letzte 24h</option>
-          <option value="7d">Letzte 7 Tage</option>
-          <option value="30d">Letzte 30 Tage</option>
+        <select value={period} onChange={(e) => setPeriod(e.target.value)} className="select shrink-0">
+          <option value="">Gesamt</option>
+          <option value="24h">24h</option>
+          <option value="7d">7 Tage</option>
+          <option value="30d">30 Tage</option>
         </select>
       </div>
 

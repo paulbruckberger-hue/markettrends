@@ -15,6 +15,7 @@ export interface ClassificationInput {
   searchQuery: string;
   watchType: 'topic' | 'company';
   sourceType: string;
+  language?: string;        // 'de' (default) | 'en'
 }
 
 export interface ClassificationResult {
@@ -29,58 +30,99 @@ export interface ClassificationResult {
 
 // ---------- Prompts ----------
 
-const BASE_RULES = `Du bist ein erfahrener B2B-Marktanalyst. Du bewertest, wie relevant ein Inhalt für einen Beobachtungsbegriff ist, und fasst ihn für eine Führungskraft auf Deutsch zusammen.
+function langInstruction(lang = 'de'): { base: string; headline: string; reason: string; tag: string } {
+  if (lang === 'en') return {
+    base: 'You are an experienced B2B market analyst. Assess how relevant a piece of content is for an observed term and summarise it for an executive. Answer EXCLUSIVELY in English.',
+    headline: 'concise Executive Headline in English',
+    reason: 'short justification (1 sentence, English)',
+    tag: 'max three keywords in English',
+  };
+  return {
+    base: 'Du bist ein erfahrener B2B-Marktanalyst. Du bewertest, wie relevant ein Inhalt für einen Beobachtungsbegriff ist, und fasst ihn für eine Führungskraft zusammen. Antworte AUSSCHLIESSLICH auf Deutsch.',
+    headline: 'prägnante Executive-Headline auf Deutsch',
+    reason: 'kurze Begründung (1 Satz, Deutsch)',
+    tag: 'max drei Schlagworte auf Deutsch',
+  };
+}
 
-RANK (Wichtigkeit/Relevanz):
+function rankRules(lang = 'de'): string {
+  if (lang === 'en') return `RANK (importance/relevance):
+- 1 = highly relevant: significant market signal, directly related, actionable.
+- 2 = relevant: clear connection, worth watching, not urgent.
+- 3 = marginal: weak/indirect connection or generic news.
+
+RESPONSE FORMAT: Reply with ONE JSON object only, no Markdown code fences, no text before or after.`;
+  return `RANK (Wichtigkeit/Relevanz):
 - 1 = hochrelevant: bedeutendes Marktsignal, direkt zum Begriff, handlungsrelevant.
 - 2 = relevant: klarer Bezug, beobachtenswert, aber nicht dringend.
 - 3 = am Rande: schwacher/indirekter Bezug oder generische Nachricht.
 
 ANTWORTFORMAT: Antworte ausschließlich mit EINEM JSON-Objekt, ohne Markdown-Codeblöcke, ohne Erklärtext davor oder danach.`;
+}
 
-const TOPIC_PROMPT = (input: ClassificationInput) => `${BASE_RULES}
+const TOPIC_PROMPT = (input: ClassificationInput) => {
+  const lang = input.language || 'de';
+  const l = langInstruction(lang);
+  const watched = lang === 'en' ? 'Observed topic' : 'Beobachtetes Thema';
+  const source = lang === 'en' ? 'Source' : 'Quelle';
+  const content = lang === 'en' ? 'Content' : 'Inhalt';
+  return `${l.base}
 
-Beobachtetes Thema: "${input.searchQuery}"
-Quelle: ${input.sourceType}
+${rankRules(lang)}
 
-Inhalt:
+${watched}: "${input.searchQuery}"
+${source}: ${input.sourceType}
+
+${content}:
 """
 ${input.content.slice(0, 4000)}
 """
 
-Gib JSON in genau dieser Form zurück:
+${lang === 'en' ? 'Return JSON in exactly this form' : 'Gib JSON in genau dieser Form zurück'}:
 {
   "rank": 1,
-  "rank_reason": "kurze Begründung (1 Satz, Deutsch)",
-  "title": "prägnante Executive-Headline auf Deutsch",
-  "summary": "• erster Punkt\\n• zweiter Punkt\\n• dritter Punkt",
+  "rank_reason": "${l.reason}",
+  "title": "${l.headline}",
+  "summary": "• first point\\n• second point\\n• third point",
   "sentiment": "positive | negative | neutral",
-  "tags": ["max", "drei", "schlagworte"]
+  "tags": ["${l.tag}"]
 }`;
+};
 
-const COMPANY_PROMPT = (input: ClassificationInput) => `${BASE_RULES}
+const COMPANY_PROMPT = (input: ClassificationInput) => {
+  const lang = input.language || 'de';
+  const l = langInstruction(lang);
+  const watched = lang === 'en' ? 'Observed company' : 'Beobachtetes Unternehmen';
+  const source = lang === 'en' ? 'Source' : 'Quelle';
+  const content = lang === 'en' ? 'Content' : 'Inhalt';
+  const signalNote = lang === 'en'
+    ? 'Also determine the signal_type from this list: product_launch, expansion, partnership, personnel, funding, regulatory, earnings, general.'
+    : 'Bestimme zusätzlich den Signal-Typ (signal_type) aus dieser Liste: product_launch, expansion, partnership, personnel, funding, regulatory, earnings, general.';
+  return `${l.base}
 
-Beobachtetes Unternehmen: "${input.searchQuery}"
-Quelle: ${input.sourceType}
+${rankRules(lang)}
 
-Bestimme zusätzlich den Signal-Typ (signal_type) aus dieser Liste:
-product_launch, expansion, partnership, personnel, funding, regulatory, earnings, general.
+${watched}: "${input.searchQuery}"
+${source}: ${input.sourceType}
 
-Inhalt:
+${signalNote}
+
+${content}:
 """
 ${input.content.slice(0, 4000)}
 """
 
-Gib JSON in genau dieser Form zurück:
+${lang === 'en' ? 'Return JSON in exactly this form' : 'Gib JSON in genau dieser Form zurück'}:
 {
   "rank": 1,
-  "rank_reason": "kurze Begründung (1 Satz, Deutsch)",
-  "title": "prägnante Executive-Headline auf Deutsch",
-  "summary": "• erster Punkt\\n• zweiter Punkt\\n• dritter Punkt",
+  "rank_reason": "${l.reason}",
+  "title": "${l.headline}",
+  "summary": "• first point\\n• second point\\n• third point",
   "sentiment": "positive | negative | neutral",
-  "tags": ["max", "drei", "schlagworte"],
+  "tags": ["${l.tag}"],
   "signal_type": "partnership"
 }`;
+};;
 
 export function buildPrompt(input: ClassificationInput): string {
   return input.watchType === 'company' ? COMPANY_PROMPT(input) : TOPIC_PROMPT(input);

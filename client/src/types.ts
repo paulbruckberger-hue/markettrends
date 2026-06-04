@@ -78,6 +78,7 @@ export type AiModel = 'claude' | 'gemini' | 'deepseek';
 
 export interface AppSettings {
   user_id: string;
+  language: 'de' | 'en';
   ai_model: AiModel;
   ai_model_variant: string | null;
   telegram_chat_id: string | null;

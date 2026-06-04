@@ -70,8 +70,8 @@ export default function WatchListPage() {
 
   return (
     <Layout title="Beobachtungen" subtitle="Themen & Unternehmen, die laufend überwacht werden">
-      <form onSubmit={onCreate} className="mb-8 rounded-xl border border-ink-800 bg-ink-900 p-5">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[140px_1fr_160px_160px]">
+      <form onSubmit={onCreate} className="mb-6 rounded-xl border border-ink-800 bg-ink-900 p-4">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-[140px_1fr_160px_160px]">
           <select value={type} onChange={(e) => setType(e.target.value as WatchType)} className="select">
             <option value="topic">Thema</option>
             <option value="company">Unternehmen</option>
@@ -80,7 +80,7 @@ export default function WatchListPage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={type === 'topic' ? 'z.B. embedded finance' : 'z.B. Stripe'}
-            className="select"
+            className="select col-span-2 sm:col-span-1"
           />
           <select value={geo} onChange={(e) => setGeo(e.target.value as GeoFilter)} className="select">
             <option value="global">{GEO_LABELS.global}</option>
@@ -115,37 +115,37 @@ export default function WatchListPage() {
 
       <div className="space-y-3">
         {items?.map((item) => (
-          <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ink-800 bg-ink-850 p-4">
-            <div className="flex items-center gap-3">
-              <span className="h-3 w-3 rounded-full" style={{ background: item.color || '#3B82F6' }} />
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-slate-100">{item.display_name}</span>
-                  <span className="rounded bg-ink-800 px-1.5 py-0.5 text-xs text-slate-400">
-                    {item.type === 'company' ? 'Unternehmen' : 'Thema'}
-                  </span>
-                  <span className="text-xs text-slate-500">{GEO_LABELS[item.geo_filter]}</span>
-                  {item.label && <span className="rounded bg-accent-600/20 px-1.5 py-0.5 text-xs text-accent-300">{item.label}</span>}
-                </div>
-                <div className="mt-1">
-                  <RunStatusRow item={item} polling={!!polling[item.id]} onDone={(id) => setPolling((p) => ({ ...p, [id]: false }))} />
+          <div key={item.id} className="rounded-xl border border-ink-800 bg-ink-850 p-4">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-start gap-2.5 min-w-0">
+                <span className="mt-1.5 h-2.5 w-2.5 rounded-full shrink-0" style={{ background: item.color || '#3B82F6' }} />
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="font-semibold text-slate-100">{item.display_name}</span>
+                    <span className="rounded bg-ink-800 px-1.5 py-0.5 text-xs text-slate-400">
+                      {item.type === 'company' ? 'Unternehmen' : 'Thema'}
+                    </span>
+                    <span className="text-xs text-slate-500">{GEO_LABELS[item.geo_filter]}</span>
+                    {item.label && <span className="rounded bg-accent-600/20 px-1.5 py-0.5 text-xs text-accent-300">{item.label}</span>}
+                  </div>
+                  <div className="mt-1">
+                    <RunStatusRow item={item} polling={!!polling[item.id]} onDone={(id) => setPolling((p) => ({ ...p, [id]: false }))} />
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => onRun(item.id)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-ink-700 bg-ink-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-ink-700"
-              >
-                <Play size={14} /> Jetzt abrufen
-              </button>
               <button
                 onClick={() => { if (confirm(`"${item.display_name}" entfernen?`)) remove.mutate(item.id); }}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-ink-700 px-3 py-1.5 text-sm text-rose-300 hover:bg-rose-500/10"
+                className="shrink-0 rounded-lg p-2 text-slate-500 hover:bg-rose-500/10 hover:text-rose-300"
               >
-                <Trash2 size={14} />
+                <Trash2 size={16} />
               </button>
             </div>
+            <button
+              onClick={() => onRun(item.id)}
+              className="mt-3 w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-ink-700 bg-ink-800 px-3 py-2 text-sm text-slate-200 hover:bg-ink-700 active:scale-[0.98]"
+            >
+              <Play size={14} /> Jetzt abrufen
+            </button>
           </div>
         ))}
       </div>

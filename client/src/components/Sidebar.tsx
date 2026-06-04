@@ -2,66 +2,47 @@ import { NavLink } from 'react-router-dom';
 import { BarChart3, Eye, LineChart, LogOut, Newspaper, Radar, Settings } from 'lucide-react';
 import { useMe, useLogout } from '../hooks/useAuth';
 
-const linkBase =
-  'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition';
+const NAV_ITEMS = [
+  { to: '/feed',         icon: Newspaper,  label: 'Feed'          },
+  { to: '/watchlist',    icon: Eye,        label: 'Beobachtungen' },
+  { to: '/dashboard',    icon: BarChart3,  label: 'Dashboard'     },
+  { to: '/intelligence', icon: LineChart,  label: 'Intelligence'  },
+  { to: '/settings',     icon: Settings,   label: 'Einstellungen' },
+];
+
+const linkBase = 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition';
 
 export default function Sidebar() {
   const { data: me } = useMe();
   const logout = useLogout();
 
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-r border-ink-800 bg-ink-900 p-4">
+    <aside className="flex w-60 shrink-0 flex-col border-r border-ink-800 bg-ink-900 h-screen sticky top-0 p-4 overflow-y-auto">
+      {/* Logo */}
       <div className="mb-8 flex items-center gap-2 px-1">
-        <Radar className="text-accent-400" size={22} />
+        <Radar className="text-accent-400 shrink-0" size={22} />
         <div>
           <div className="text-sm font-bold leading-tight text-slate-100">Markttrends</div>
           <div className="text-xs text-slate-500">Scouting</div>
         </div>
       </div>
 
+      {/* Navigation */}
       <nav className="flex flex-col gap-1">
-        <NavLink
-          to="/dashboard"
-          className={({ isActive }) =>
-            `${linkBase} ${isActive ? 'bg-accent-600/20 text-accent-300' : 'text-slate-300 hover:bg-ink-800'}`
-          }
-        >
-          <BarChart3 size={18} /> Dashboard
-        </NavLink>
-        <NavLink
-          to="/feed"
-          className={({ isActive }) =>
-            `${linkBase} ${isActive ? 'bg-accent-600/20 text-accent-300' : 'text-slate-300 hover:bg-ink-800'}`
-          }
-        >
-          <Newspaper size={18} /> Feed
-        </NavLink>
-        <NavLink
-          to="/watchlist"
-          className={({ isActive }) =>
-            `${linkBase} ${isActive ? 'bg-accent-600/20 text-accent-300' : 'text-slate-300 hover:bg-ink-800'}`
-          }
-        >
-          <Eye size={18} /> Beobachtungen
-        </NavLink>
-        <NavLink
-          to="/intelligence"
-          className={({ isActive }) =>
-            `${linkBase} ${isActive ? 'bg-accent-600/20 text-accent-300' : 'text-slate-300 hover:bg-ink-800'}`
-          }
-        >
-          <LineChart size={18} /> Intelligence
-        </NavLink>
-        <NavLink
-          to="/settings"
-          className={({ isActive }) =>
-            `${linkBase} ${isActive ? 'bg-accent-600/20 text-accent-300' : 'text-slate-300 hover:bg-ink-800'}`
-          }
-        >
-          <Settings size={18} /> Einstellungen
-        </NavLink>
+        {NAV_ITEMS.map(({ to, icon: Icon, label }) => (
+          <NavLink
+            key={to}
+            to={to}
+            className={({ isActive }) =>
+              `${linkBase} ${isActive ? 'bg-accent-600/20 text-accent-300' : 'text-slate-300 hover:bg-ink-800'}`
+            }
+          >
+            <Icon size={18} /> {label}
+          </NavLink>
+        ))}
       </nav>
 
+      {/* User + Logout */}
       <div className="mt-auto border-t border-ink-800 pt-4">
         <div className="mb-2 px-1 text-xs text-slate-500">
           Angemeldet als <span className="font-semibold text-slate-300">{me?.username ?? '…'}</span>

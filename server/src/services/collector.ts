@@ -32,13 +32,17 @@ type SearchTermRow = typeof search_terms.$inferSelect;
  * Determine which AI model/variant to use for the (shared) classification.
  * MVP is single-user, so we read the admin's settings; falls back to Claude.
  */
-async function getActiveAiConfig(): Promise<{ model: AiModel; variant?: string }> {
+async function getActiveAiConfig(): Promise<{ model: AiModel; variant?: string; language: string }> {
   const [admin] = await db.select().from(users).where(eq(users.role, 'admin'));
   if (admin) {
     const [s] = await db.select().from(settings).where(eq(settings.user_id, admin.id));
-    if (s) return { model: s.ai_model as AiModel, variant: s.ai_model_variant ?? undefined };
+    if (s) return {
+      model: s.ai_model as AiModel,
+      variant: s.ai_model_variant ?? undefined,
+      language: s.language ?? 'de',
+    };
   }
-  return { model: 'claude' };
+  return { model: 'claude', language: 'de' };
 }
 
 function logSourceError(source: string, term: SearchTermRow, err: unknown): void {
@@ -162,6 +166,7 @@ export async function collectForSearchTerm(
         searchQuery: term.query_display,
         watchType,
         sourceType: cand.source_type,
+        language: aiCfg.language,
       };
 
       let result;
