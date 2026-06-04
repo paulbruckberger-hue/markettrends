@@ -61,8 +61,14 @@ export interface FeedItem {
   source_name: string | null;
   source_language: string | null;
   original_title: string | null;
+  full_text: string | null;
   author: string | null;
+  author_info: string | null;
+  author_type: string | null;
   reactions: number | null;
+  comments_count: number | null;
+  shares_count: number | null;
+  extra_data: Record<string, unknown> | null;
   published_at: string | null;
   is_read: boolean;
   is_bookmarked: boolean;

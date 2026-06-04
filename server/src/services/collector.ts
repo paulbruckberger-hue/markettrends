@@ -136,8 +136,14 @@ export async function collectForSearchTerm(
         source_name: cand.source_name ?? null,
         original_title: cand.title,
         raw_excerpt: cand.excerpt ?? null,
+        full_text: cand.full_text ?? null,
         author: cand.author ?? null,
+        author_info: cand.author_info ?? null,
+        author_type: cand.author_type ?? null,
         reactions: cand.reactions ?? 0,
+        comments_count: cand.comments_count ?? 0,
+        shares_count: cand.shares_count ?? 0,
+        extra_data: cand.extra_data ?? null,
         source_language: cand.source_language ?? null,
         published_at: cand.published_at ?? null,
       }).onConflictDoNothing({ target: articles.content_hash }).returning({ id: articles.id });
@@ -161,7 +167,8 @@ export async function collectForSearchTerm(
 
       // --- Classify (1 AI call) ---
       const input: ClassificationInput = {
-        content: `${cand.title}\n\n${cand.excerpt ?? ''}`.trim(),
+        // Use full_text when available (LinkedIn posts); fall back to excerpt (Google News snippets)
+        content: `${cand.title}\n\n${cand.full_text ?? cand.excerpt ?? ''}`.trim(),
         searchQuery: term.query_display,
         watchType,
         sourceType: cand.source_type,

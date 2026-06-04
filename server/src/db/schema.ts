@@ -93,8 +93,14 @@ export const articles = pgTable('articles', {
   original_title: text('original_title'),
   raw_excerpt: text('raw_excerpt'),               // gekürzter Originaltext (für Re-Klassifikation)
   author: text('author'),
-  reactions: integer('reactions').default(0),     // LinkedIn-Engagement
+  author_info: text('author_info'),               // LinkedIn: Person-Headline oder Firmen-Tagline
+  author_type: text('author_type'),               // 'profile' | 'company' | null
+  reactions: integer('reactions').default(0),     // Likes
+  comments_count: integer('comments_count').default(0),
+  shares_count: integer('shares_count').default(0),
+  full_text: text('full_text'),                   // vollständiger Originaltext (kein Limit)
   source_language: text('source_language'),       // 'de' | 'en' | null = unknown
+  extra_data: jsonb('extra_data'),                // flexible: Post-Bilder, Post-ID etc.
   published_at: timestamp('published_at'),
   created_at: timestamp('created_at').defaultNow()
 }, (t) => ({

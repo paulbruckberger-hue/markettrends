@@ -55,12 +55,14 @@ export async function fetchGoogleNews(query: string, geo: GeoFilter, lookbackDay
     .filter((it) => it.link && it.title)
     .map((it) => {
       const published = it.pubDate ? new Date(it.pubDate) : null;
+      const bodyText = (it.contentSnippet || it.content || '').trim();
       return {
         source_url: it.link as string,
         source_type: 'google_news' as const,
         source_name: sourceName(it),
         title: (it.title as string).replace(/ - [^-]+$/, '').trim(),
-        excerpt: (it.contentSnippet || it.content || '').slice(0, 1000),
+        excerpt: bodyText.slice(0, 1000),
+        full_text: bodyText || undefined,  // RSS only provides snippet; stored as-is
         author: it.creator,
         published_at: published && !isNaN(published.getTime()) ? published : null,
         source_language: geo === 'global' ? 'en' : 'de',
