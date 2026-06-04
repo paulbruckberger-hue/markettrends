@@ -71,13 +71,21 @@ export function mapLinkedInPost(p: LiPost, sourceType: SourceTypeName, prefilter
   };
 }
 
-/** Topic search: posts matching a keyword from the last 24h. */
-export async function fetchLinkedInPosts(query: string, limit = 5): Promise<SourceArticle[]> {
+/** Map lookbackDays to Apify's postedLimit string. */
+function toPostedLimit(lookbackDays?: number): string {
+  if (!lookbackDays || lookbackDays <= 7) return 'week';
+  return 'month';
+}
+
+/** Topic search: posts matching a keyword. Default: last week, up to 25 posts. */
+export async function fetchLinkedInPosts(query: string, lookbackDays?: number, limit = 25): Promise<SourceArticle[]> {
   const items = await runActorSync<LiPost>(LINKEDIN_POST_ACTOR, {
     searchQueries: [query],
     maxPosts: limit,
-    postedLimit: '24h',
+    postedLimit: toPostedLimit(lookbackDays),
     sortBy: 'date',
+    profileScraperMode: 'short',
+    startPage: 1,
   });
   return items.map((p) => mapLinkedInPost(p, 'linkedin_post', false)).filter((a): a is SourceArticle => a !== null);
 }

@@ -61,12 +61,12 @@ async function gatherCandidates(term: SearchTermRow, lookbackDays?: number): Pro
   }
 
   if (cfg.linkedin_posts && apifyEnabled()) {
-    try { out.push(...await fetchLinkedInPosts(term.query_display)); }
+    try { out.push(...await fetchLinkedInPosts(term.query_display, lookbackDays)); }
     catch (err) { logSourceError('linkedin_posts', term, err); }
   }
 
   if (cfg.linkedin_company_page && isCompany && term.company_linkedin_id && apifyEnabled()) {
-    try { out.push(...await fetchCompanyPagePosts(term.company_linkedin_id)); }
+    try { out.push(...await fetchCompanyPagePosts(term.company_linkedin_id, lookbackDays)); }
     catch (err) { logSourceError('linkedin_company_page', term, err); }
   }
 
