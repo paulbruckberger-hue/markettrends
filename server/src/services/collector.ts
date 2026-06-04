@@ -11,9 +11,7 @@ import { apifyEnabled } from './sources/apifyClient';
 import { fanOutForTerm } from './notifications';
 import { SourceArticle } from './sources/types';
 import { GeoFilter, WatchType } from '../types';
-
-// Soft cap on AI calls per term per run to protect the API budget.
-const MAX_NEW_CLASSIFICATIONS_PER_RUN = 30;
+import { getAppConfig, AppConfig } from '../lib/appConfig';
 
 export interface RunSummary {
   jobRunId: string;
@@ -49,24 +47,26 @@ function logSourceError(source: string, term: SearchTermRow, err: unknown): void
 }
 
 /** Gather raw candidates from Google News + LinkedIn for a term. */
-async function gatherCandidates(term: SearchTermRow, lookbackDays?: number): Promise<SourceArticle[]> {
+async function gatherCandidates(term: SearchTermRow, lookbackDays?: number, appCfg?: AppConfig): Promise<SourceArticle[]> {
   const out: SourceArticle[] = [];
   const cfg = term.sources_config;
   const geo = term.geo_filter as GeoFilter;
   const isCompany = term.type === 'company';
+  const liLimit = appCfg?.linkedin_max_posts ?? 25;
+  const gnLimit = appCfg?.google_news_max_results ?? 20;
 
   if (cfg.google_news) {
-    try { out.push(...await fetchGoogleNews(term.query_display, geo, lookbackDays)); }
+    try { out.push(...await fetchGoogleNews(term.query_display, geo, lookbackDays, gnLimit)); }
     catch (err) { logSourceError('google_news', term, err); }
   }
 
   if (cfg.linkedin_posts && apifyEnabled()) {
-    try { out.push(...await fetchLinkedInPosts(term.query_display, lookbackDays)); }
+    try { out.push(...await fetchLinkedInPosts(term.query_display, lookbackDays, liLimit)); }
     catch (err) { logSourceError('linkedin_posts', term, err); }
   }
 
   if (cfg.linkedin_company_page && isCompany && term.company_linkedin_id && apifyEnabled()) {
-    try { out.push(...await fetchCompanyPagePosts(term.company_linkedin_id, lookbackDays)); }
+    try { out.push(...await fetchCompanyPagePosts(term.company_linkedin_id, lookbackDays, liLimit)); }
     catch (err) { logSourceError('linkedin_company_page', term, err); }
   }
 
@@ -95,7 +95,8 @@ export async function collectForSearchTerm(
   };
 
   try {
-    const aiCfg = await getActiveAiConfig();
+    const [aiCfg, appCfg] = await Promise.all([getActiveAiConfig(), getAppConfig()]);
+    const maxClassifications = appCfg.collector_max_classifications;
     const watchType = term.type as WatchType;
 
     // Get context hint from the first active subscriber for this term
@@ -105,15 +106,15 @@ export async function collectForSearchTerm(
       .limit(1);
     const contextHint = sub?.context_hint ?? null;
 
-    const candidates = await gatherCandidates(term, lookbackDays);
+    const candidates = await gatherCandidates(term, lookbackDays, appCfg);
     summary.articles_found = candidates.length;
 
     // Dedup within this run by content_hash (same URL from multiple sources).
     const seen = new Set<string>();
 
     for (const cand of candidates) {
-      if (summary.classifications_new >= MAX_NEW_CLASSIFICATIONS_PER_RUN) {
-        console.log(`[collector] reached cap of ${MAX_NEW_CLASSIFICATIONS_PER_RUN} new classifications for "${term.query_display}"`);
+      if (summary.classifications_new >= maxClassifications) {
+        console.log(`[collector] reached cap of ${maxClassifications} new classifications for "${term.query_display}"`);
         break;
       }
       const hash = contentHash(cand.source_url);

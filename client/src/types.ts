@@ -125,6 +125,24 @@ export interface SourcesResponse {
   bySource: { source_type: SourceTypeName; n: number }[];
 }
 
+export interface AppConfig {
+  id: number;
+  linkedin_max_posts: number;
+  linkedin_posted_limit: string;
+  google_news_max_results: number;
+  collector_max_classifications: number;
+  updated_at: string | null;
+}
+
+export interface AdminUser {
+  id: string;
+  username: string;
+  email: string | null;
+  role: string;
+  is_active: boolean;
+  created_at: string | null;
+}
+
 export interface RunStatus {
   status: 'idle' | 'running' | 'success' | 'error';
   articles_found?: number;

@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
 import { db, pool } from './client';
-import { users, settings, rss_sources } from './schema';
+import { users, settings, rss_sources, app_config } from './schema';
 
 /**
  * Seed data. Idempotent — uses onConflictDoNothing so repeated container starts
@@ -79,6 +79,9 @@ export async function runSeed(): Promise<void> {
       is_active: true,
     }).onConflictDoNothing({ target: rss_sources.url });
   }
+
+  // ---- App Config (global default row) ----
+  await db.insert(app_config).values({ id: 1 }).onConflictDoNothing();
 
   console.log(`[seed] done. user=${paul.username} feeds=${RSS_FEEDS.length}`);
 }

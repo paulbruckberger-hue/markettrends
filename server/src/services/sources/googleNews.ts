@@ -5,7 +5,7 @@ import { SourceArticle } from './types';
 
 const parser = new Parser({ timeout: 15_000 });
 
-const MAX_RESULTS = 20;  // increased for historical searches
+const DEFAULT_MAX_RESULTS = 20;
 const WINDOW_MS = 48 * 60 * 60 * 1000; // default: last 48h
 
 function geoParams(geo: GeoFilter): string {
@@ -39,7 +39,7 @@ function sourceName(item: GnItem): string | undefined {
  * lookbackDays overrides the default 48h window — adds `after:YYYY-MM-DD` to the query
  * so Google surfaces older articles in the result set.
  */
-export async function fetchGoogleNews(query: string, geo: GeoFilter, lookbackDays?: number): Promise<SourceArticle[]> {
+export async function fetchGoogleNews(query: string, geo: GeoFilter, lookbackDays?: number, maxResults = DEFAULT_MAX_RESULTS): Promise<SourceArticle[]> {
   const effectiveDays = lookbackDays ?? 2;
   const afterDate = new Date(Date.now() - effectiveDays * 24 * 60 * 60 * 1000);
   // Add the after: operator only when we want to go further back than the default feed window
@@ -67,7 +67,7 @@ export async function fetchGoogleNews(query: string, geo: GeoFilter, lookbackDay
       };
     })
     .filter((a) => !a.published_at || a.published_at.getTime() >= cutoff)
-    .slice(0, MAX_RESULTS);
+    .slice(0, maxResults);
 
   return items;
 }

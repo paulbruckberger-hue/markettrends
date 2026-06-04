@@ -176,6 +176,16 @@ export const settings = pgTable('settings', {
   updated_at: timestamp('updated_at').defaultNow()
 });
 
+// ---------- App Config (global, Admin-verwaltet, immer Zeile id=1) ----------
+export const app_config = pgTable('app_config', {
+  id: integer('id').primaryKey().default(1),
+  linkedin_max_posts: integer('linkedin_max_posts').notNull().default(25),
+  linkedin_posted_limit: text('linkedin_posted_limit').notNull().default('week'),
+  google_news_max_results: integer('google_news_max_results').notNull().default(20),
+  collector_max_classifications: integer('collector_max_classifications').notNull().default(30),
+  updated_at: timestamp('updated_at').defaultNow(),
+});
+
 // ---------- Job Runs (Observability + Run-Status-Polling) ----------
 export const job_runs = pgTable('job_runs', {
   id: uuid('id').primaryKey().defaultRandom(),

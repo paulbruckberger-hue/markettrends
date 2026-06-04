@@ -13,6 +13,7 @@ import { analyticsRouter } from './routes/analytics';
 import { settingsRouter } from './routes/settings';
 import { digestRouter } from './routes/digest';
 import { webhookRouter } from './routes/webhook';
+import { adminRouter } from './routes/admin';
 
 function buildCorsOrigins(): (string | RegExp)[] {
   const origins = new Set<string>([
@@ -51,6 +52,7 @@ async function start(): Promise<void> {
   app.use('/api/analytics', analyticsRouter);
   app.use('/api/settings', settingsRouter);
   app.use('/api/digest', digestRouter);
+  app.use('/api/admin', adminRouter);
 
   // Public Telegram webhook (secret-verified, no JWT)
   app.use('/webhook', webhookRouter);

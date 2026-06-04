@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { BarChart3, Eye, LineChart, LogOut, Newspaper, Radar, Settings } from 'lucide-react';
+import { BarChart3, Eye, LineChart, LogOut, Newspaper, Radar, Settings, ShieldCheck } from 'lucide-react';
 import { useMe, useLogout } from '../hooks/useAuth';
 
 const NAV_ITEMS = [
@@ -15,6 +15,7 @@ const linkBase = 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medi
 export default function Sidebar() {
   const { data: me } = useMe();
   const logout = useLogout();
+  const isAdmin = me?.role === 'admin';
 
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r border-ink-800 bg-ink-900 h-screen sticky top-0 p-4 overflow-y-auto">
@@ -40,12 +41,23 @@ export default function Sidebar() {
             <Icon size={18} /> {label}
           </NavLink>
         ))}
+        {isAdmin && (
+          <NavLink
+            to="/admin"
+            className={({ isActive }) =>
+              `${linkBase} ${isActive ? 'bg-amber-600/20 text-amber-300' : 'text-amber-500/70 hover:bg-ink-800 hover:text-amber-400'}`
+            }
+          >
+            <ShieldCheck size={18} /> Admin
+          </NavLink>
+        )}
       </nav>
 
       {/* User + Logout */}
       <div className="mt-auto border-t border-ink-800 pt-4">
         <div className="mb-2 px-1 text-xs text-slate-500">
           Angemeldet als <span className="font-semibold text-slate-300">{me?.username ?? '…'}</span>
+          {isAdmin && <span className="ml-1 text-amber-500/70">(admin)</span>}
         </div>
         <button
           onClick={logout}
