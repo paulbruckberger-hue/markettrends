@@ -74,6 +74,8 @@ export const watch_items = pgTable('watch_items', {
   is_active: boolean('is_active').notNull().default(true),
   // null = default global schedule (every 6h); 'manual' = never auto-run; '24h' | '168h' = daily/weekly
   schedule_interval: text('schedule_interval'),
+  // Free-text hint that guides the AI classifier: what matters for this specific subscription
+  context_hint: text('context_hint'),
   created_at: timestamp('created_at').defaultNow()
 }, (t) => ({
   uniqSub: unique('uniq_user_term').on(t.user_id, t.search_term_id),

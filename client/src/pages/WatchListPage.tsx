@@ -171,6 +171,7 @@ export default function WatchListPage() {
 
   // Per-item run states
   const [runStates, setRunStates] = useState<Record<string, RunState>>({});
+  const [lookbackDays, setLookbackDays] = useState<Record<string, number | undefined>>({});
   const pollingIntervals = useRef<Record<string, ReturnType<typeof setInterval>>>({});
 
   const setPhase = (id: string, update: Partial<RunState>) =>
@@ -222,9 +223,9 @@ export default function WatchListPage() {
     return () => { Object.values(pollingIntervals.current).forEach(clearInterval); };
   }, []);
 
-  const handleRun = (id: string) => {
+  const handleRun = (id: string, days?: number) => {
     setPhase(id, { phase: 'triggering', triggeredAt: Date.now() });
-    runMutation.mutate(id, {
+    runMutation.mutate({ id, lookback_days: days }, {
       onSuccess: () => {
         setPhase(id, { phase: 'triggered', triggeredAt: Date.now() });
         startPolling(id);
@@ -316,8 +317,24 @@ export default function WatchListPage() {
 
               {/* Action row */}
               <div className="mt-3 flex items-center gap-2">
+                <select
+                  value={lookbackDays[item.id] ?? ''}
+                  onChange={(e) => setLookbackDays((prev) => ({
+                    ...prev,
+                    [item.id]: e.target.value ? Number(e.target.value) : undefined,
+                  }))}
+                  disabled={isRunning}
+                  className="select text-xs shrink-0"
+                  title="Wie weit in die Vergangenheit suchen?"
+                >
+                  <option value="">Letzte 2 Tage</option>
+                  <option value="7">7 Tage</option>
+                  <option value="14">14 Tage</option>
+                  <option value="30">30 Tage</option>
+                  <option value="90">90 Tage</option>
+                </select>
                 <button
-                  onClick={() => handleRun(item.id)}
+                  onClick={() => handleRun(item.id, lookbackDays[item.id])}
                   disabled={isRunning}
                   className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-ink-700 bg-ink-800 px-3 py-2.5 text-sm font-medium text-slate-200 hover:bg-ink-700 disabled:opacity-50 active:scale-[0.98] transition"
                 >

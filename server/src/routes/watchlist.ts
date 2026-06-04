@@ -34,6 +34,7 @@ watchlistRouter.get('/', async (req: AuthedRequest, res: Response) => {
     color: watch_items.color,
     is_active: watch_items.is_active,
     schedule_interval: watch_items.schedule_interval,
+    context_hint: watch_items.context_hint,
     created_at: watch_items.created_at,
     search_term_id: search_terms.id,
     type: search_terms.type,
@@ -114,6 +115,7 @@ watchlistRouter.put('/:id', async (req: AuthedRequest, res: Response) => {
   if (typeof b.label === 'string') patch.label = b.label;
   if (typeof b.color === 'string') patch.color = b.color;
   if (typeof b.is_active === 'boolean') patch.is_active = b.is_active;
+  if (b.context_hint !== undefined) patch.context_hint = typeof b.context_hint === 'string' ? b.context_hint.trim() || null : null;
   if (Object.keys(patch).length === 0) {
     res.status(400).json({ error: 'Keine gültigen Felder' });
     return;
@@ -152,8 +154,10 @@ watchlistRouter.post('/:id/run', async (req: AuthedRequest, res: Response) => {
     res.status(404).json({ error: 'Nicht gefunden' });
     return;
   }
-  const { mode } = await triggerCollector(wi.search_term_id);
-  res.status(202).json({ triggered: true, mode, search_term_id: wi.search_term_id });
+  const rawLookback = req.body?.lookback_days;
+  const lookbackDays = typeof rawLookback === 'number' && rawLookback > 0 ? rawLookback : undefined;
+  const { mode } = await triggerCollector(wi.search_term_id, lookbackDays);
+  res.status(202).json({ triggered: true, mode, search_term_id: wi.search_term_id, lookback_days: lookbackDays ?? null });
 });
 
 // PUT /api/watchlist/:id/schedule  → set schedule_interval per watch-item

@@ -40,10 +40,10 @@ export function useDeleteWatch() {
 export function useRunWatch() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => (await api.post(`/api/watchlist/${id}/run`)).data,
-    onSuccess: (_data, id) => {
-      // Force immediate re-fetch of run-status so polling starts right away
-      void qc.invalidateQueries({ queryKey: ['run-status', id] });
+    mutationFn: async ({ id, lookback_days }: { id: string; lookback_days?: number }) =>
+      (await api.post(`/api/watchlist/${id}/run`, lookback_days ? { lookback_days } : {})).data,
+    onSuccess: (_data, vars) => {
+      void qc.invalidateQueries({ queryKey: ['run-status', vars.id] });
     },
   });
 }

@@ -5,8 +5,8 @@ import { SourceArticle } from './types';
 
 const parser = new Parser({ timeout: 15_000 });
 
-const MAX_RESULTS = 8;
-const WINDOW_MS = 48 * 60 * 60 * 1000; // last 48h
+const MAX_RESULTS = 20;  // increased for historical searches
+const WINDOW_MS = 48 * 60 * 60 * 1000; // default: last 48h
 
 function geoParams(geo: GeoFilter): string {
   switch (geo) {
@@ -35,14 +35,21 @@ function sourceName(item: GnItem): string | undefined {
 }
 
 /**
- * Google News RSS search, geo-aware. Returns up to 8 items from the last 48h.
- * Wrapped in retry; on hard failure the collector catches and logs it.
+ * Google News RSS search, geo-aware. Returns up to MAX_RESULTS items.
+ * lookbackDays overrides the default 48h window — adds `after:YYYY-MM-DD` to the query
+ * so Google surfaces older articles in the result set.
  */
-export async function fetchGoogleNews(query: string, geo: GeoFilter): Promise<SourceArticle[]> {
-  const url = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&${geoParams(geo)}`;
+export async function fetchGoogleNews(query: string, geo: GeoFilter, lookbackDays?: number): Promise<SourceArticle[]> {
+  const effectiveDays = lookbackDays ?? 2;
+  const afterDate = new Date(Date.now() - effectiveDays * 24 * 60 * 60 * 1000);
+  // Add the after: operator only when we want to go further back than the default feed window
+  const q = effectiveDays > 2
+    ? `${query} after:${afterDate.toISOString().slice(0, 10)}`
+    : query;
+  const url = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&${geoParams(geo)}`;
 
   const feed = await withRetry(() => parser.parseURL(url), { label: `googleNews("${query}")` });
-  const cutoff = Date.now() - WINDOW_MS;
+  const cutoff = afterDate.getTime();
 
   const items: SourceArticle[] = (feed.items as GnItem[] | undefined ?? [])
     .filter((it) => it.link && it.title)

@@ -12,33 +12,33 @@ import { collectForSearchTerm } from '../services/collector';
  * - Local dev: run the collector in-process (fire-and-forget) so "Jetzt
  *   abrufen" works end-to-end without GCP. Status is polled via job_runs.
  */
-export async function triggerCollector(searchTermId: string): Promise<{ mode: 'cloudrun' | 'local' }> {
+export async function triggerCollector(
+  searchTermId: string,
+  lookbackDays?: number,
+): Promise<{ mode: 'cloudrun' | 'local' }> {
   if (config.gcpProjectId) {
-    await runCloudRunJob(searchTermId);
+    await runCloudRunJob(searchTermId, lookbackDays);
     return { mode: 'cloudrun' };
   }
 
   const [term] = await db.select().from(search_terms).where(eq(search_terms.id, searchTermId));
   if (term) {
-    // Do not await — let the HTTP request return; the UI polls run-status.
-    void collectForSearchTerm(term, 'manual').catch((err) => {
+    void collectForSearchTerm(term, 'manual', lookbackDays).catch((err) => {
       console.error('[jobTrigger:local] collection failed:', err);
     });
   }
   return { mode: 'local' };
 }
 
-async function runCloudRunJob(searchTermId: string): Promise<void> {
+async function runCloudRunJob(searchTermId: string, lookbackDays?: number): Promise<void> {
   const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
   const client = await auth.getClient();
   const url = `https://${config.gcpRegion}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${config.gcpProjectId}/jobs/${config.collectorJobName}:run`;
+  const env: { name: string; value: string }[] = [{ name: 'SEARCH_TERM_ID', value: searchTermId }];
+  if (lookbackDays) env.push({ name: 'LOOKBACK_DAYS', value: String(lookbackDays) });
   await client.request({
     url,
     method: 'POST',
-    data: {
-      overrides: {
-        containerOverrides: [{ env: [{ name: 'SEARCH_TERM_ID', value: searchTermId }] }],
-      },
-    },
+    data: { overrides: { containerOverrides: [{ env }] } },
   });
 }

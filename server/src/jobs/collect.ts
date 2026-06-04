@@ -10,12 +10,19 @@ import { collectAll, collectForSearchTerm } from '../services/collector';
  */
 async function main(): Promise<void> {
   const termId = process.env.SEARCH_TERM_ID?.trim();
+  const lookbackDays = process.env.LOOKBACK_DAYS
+    ? parseInt(process.env.LOOKBACK_DAYS, 10)
+    : undefined;
+
+  if (lookbackDays) {
+    console.log(`[collect] lookback mode: ${lookbackDays} days`);
+  }
 
   if (termId) {
     console.log(`[collect] single-term run for ${termId}`);
     const [term] = await db.select().from(search_terms).where(eq(search_terms.id, termId));
     if (!term) throw new Error(`search_term ${termId} not found`);
-    const summary = await collectForSearchTerm(term, 'manual');
+    const summary = await collectForSearchTerm(term, 'manual', lookbackDays);
     console.log('[collect] done:', summary);
   } else {
     console.log('[collect] batch run for all active search_terms');

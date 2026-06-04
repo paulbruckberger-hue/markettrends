@@ -1,0 +1,1 @@
+ALTER TABLE "watch_items" ADD COLUMN "context_hint" text;

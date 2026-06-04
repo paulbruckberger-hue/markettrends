@@ -16,6 +16,8 @@ export interface ClassificationInput {
   watchType: 'topic' | 'company';
   sourceType: string;
   language?: string;        // 'de' (default) | 'en'
+  /** Free-text hint from the user describing what matters for this keyword. Injected into the prompt. */
+  contextHint?: string | null;
 }
 
 export interface ClassificationResult {
@@ -60,6 +62,14 @@ RESPONSE FORMAT: Reply with ONE JSON object only, no Markdown code fences, no te
 ANTWORTFORMAT: Antworte ausschließlich mit EINEM JSON-Objekt, ohne Markdown-Codeblöcke, ohne Erklärtext davor oder danach.`;
 }
 
+function contextBlock(input: ClassificationInput): string {
+  if (!input.contextHint?.trim()) return '';
+  const label = (input.language || 'de') === 'en'
+    ? 'User context (what matters most for this keyword)'
+    : 'Nutzer-Kontext (was für dieses Keyword besonders wichtig ist)';
+  return `${label}: ${input.contextHint.trim()}\n`;
+}
+
 const TOPIC_PROMPT = (input: ClassificationInput) => {
   const lang = input.language || 'de';
   const l = langInstruction(lang);
@@ -71,7 +81,7 @@ const TOPIC_PROMPT = (input: ClassificationInput) => {
 ${rankRules(lang)}
 
 ${watched}: "${input.searchQuery}"
-${source}: ${input.sourceType}
+${contextBlock(input)}${source}: ${input.sourceType}
 
 ${content}:
 """
@@ -103,7 +113,7 @@ const COMPANY_PROMPT = (input: ClassificationInput) => {
 ${rankRules(lang)}
 
 ${watched}: "${input.searchQuery}"
-${source}: ${input.sourceType}
+${contextBlock(input)}${source}: ${input.sourceType}
 
 ${signalNote}
 

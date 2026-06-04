@@ -31,6 +31,7 @@ export interface WatchItem {
   color: string | null;
   is_active: boolean;
   schedule_interval: ScheduleInterval;
+  context_hint: string | null;
   created_at: string | null;
   search_term_id: string;
   type: WatchType;
@@ -120,20 +121,8 @@ export interface WatchAnalytics {
   signalTypes: { signal_type: SignalType; n: number }[];
 }
 
-export interface RssSourceHealth {
-  id: string;
-  name: string;
-  url: string;
-  category: string;
-  language: string | null;
-  is_active: boolean | null;
-  last_ok_at: string | null;
-  last_error: string | null;
-}
-
 export interface SourcesResponse {
   bySource: { source_type: SourceTypeName; n: number }[];
-  feeds: RssSourceHealth[];
 }
 
 export interface RunStatus {

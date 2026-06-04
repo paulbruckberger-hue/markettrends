@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../db/client';
-import { rss_sources, search_terms, watch_items } from '../db/schema';
+import { search_terms, watch_items } from '../db/schema';
 import { authMiddleware, AuthedRequest } from '../middleware/auth';
 
 export const analyticsRouter = Router();
@@ -115,16 +115,11 @@ analyticsRouter.get('/watchitem/:id', async (req: AuthedRequest, res: Response) 
 // GET /api/analytics/sources
 analyticsRouter.get('/sources', async (req: AuthedRequest, res: Response) => {
   const uid = req.user!.id;
-  const [bySource, feeds] = await Promise.all([
-    rows(sql`SELECT a.source_type AS source_type, count(*)::int AS n
-             FROM watch_items wi JOIN classifications c ON c.search_term_id = wi.search_term_id
-             JOIN articles a ON a.id = c.article_id
-             WHERE wi.user_id = ${uid} AND wi.is_active = true GROUP BY a.source_type ORDER BY n DESC`),
-    db.select().from(rss_sources).orderBy(rss_sources.category, rss_sources.name),
-  ]);
+  const bySource = await rows(sql`
+    SELECT a.source_type AS source_type, count(*)::int AS n
+    FROM watch_items wi JOIN classifications c ON c.search_term_id = wi.search_term_id
+    JOIN articles a ON a.id = c.article_id
+    WHERE wi.user_id = ${uid} AND wi.is_active = true GROUP BY a.source_type ORDER BY n DESC`);
 
-  res.json({
-    bySource: bySource.map((r) => ({ source_type: r.source_type, n: num(r.n) })),
-    feeds,
-  });
+  res.json({ bySource: bySource.map((r) => ({ source_type: r.source_type, n: num(r.n) })) });
 });

@@ -3,8 +3,8 @@ import { CheckCircle2, Loader2, Mail, Send, XCircle } from 'lucide-react';
 import Layout from '../components/Layout';
 import { useMe } from '../hooks/useAuth';
 import {
-  openDigestPreview, useRssSources, useSendDigest, useSettings, useTestAi,
-  useTestEmail, useTestTelegram, useToggleRss, useUpdateSettings,
+  openDigestPreview, useSendDigest, useSettings, useTestAi,
+  useTestEmail, useTestTelegram, useUpdateSettings,
 } from '../hooks/useSettings';
 import { AiModel } from '../types';
 import { apiError } from '../lib/api';
@@ -61,9 +61,6 @@ export default function SettingsPage() {
   const testTg = useTestTelegram();
   const testMail = useTestEmail();
   const sendDigest = useSendDigest();
-  const { data: feeds } = useRssSources();
-  const toggleRss = useToggleRss();
-
   const [language, setLanguage] = useState<'de' | 'en'>('de');
   const [aiModel, setAiModel] = useState<AiModel>('claude');
   const [variant, setVariant] = useState('');
@@ -229,36 +226,6 @@ export default function SettingsPage() {
               <TestBadge result={testMail.data} />
               {testMail.isError && <TestBadge result={{ ok: false, message: apiError(testMail.error) }} />}
               {settings.newsletter_last_sent && <div className="text-xs text-slate-500">Zuletzt gesendet: {formatDateTime(settings.newsletter_last_sent)}</div>}
-            </div>
-          </Section>
-
-          {/* RSS HEALTH */}
-          <Section title="RSS-Quellen (Health)">
-            <div className="max-h-80 overflow-y-auto pr-1">
-              <table className="w-full text-sm">
-                <tbody>
-                  {feeds?.map((f) => (
-                    <tr key={f.id} className="border-b border-ink-800">
-                      <td className="py-2">
-                        <div className="text-slate-200">{f.name}</div>
-                        <div className="text-xs text-slate-500">{f.category}</div>
-                        {f.last_error && <div className="text-xs text-rose-400" title={f.last_error}>Fehler beim letzten Abruf</div>}
-                      </td>
-                      <td className="py-2 text-center">
-                        {f.last_error ? <span className="text-rose-400" title={f.last_error}>●</span>
-                          : f.last_ok_at ? <span className="text-emerald-400" title={`OK: ${formatDateTime(f.last_ok_at)}`}>●</span>
-                          : <span className="text-slate-500">○</span>}
-                      </td>
-                      <td className="py-2 text-right">
-                        <button onClick={() => toggleRss.mutate({ id: f.id, is_active: !f.is_active })}
-                          className={`rounded-md px-2 py-1 text-xs ${f.is_active ? 'bg-accent-600/20 text-accent-300' : 'bg-ink-800 text-slate-400'}`}>
-                          {f.is_active ? 'aktiv' : 'inaktiv'}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
             </div>
           </Section>
 

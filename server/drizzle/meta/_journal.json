@@ -22,6 +22,13 @@
       "when": 1780568452277,
       "tag": "0002_cool_toro",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1780573566498,
+      "tag": "0003_famous_emma_frost",
+      "breakpoints": true
     }
   ]
 }

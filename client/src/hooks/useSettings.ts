@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
-import { AppSettings, RssSourceHealth } from '../types';
+import { AppSettings } from '../types';
 
 export function useSettings() {
   return useQuery({
@@ -30,21 +30,6 @@ export function useTestEmail() {
 }
 export function useSendDigest() {
   return useMutation({ mutationFn: async () => (await api.post<{ sent: boolean; message: string }>('/api/digest/send')).data });
-}
-
-export function useRssSources() {
-  return useQuery({
-    queryKey: ['rss-sources'],
-    queryFn: async () => (await api.get<RssSourceHealth[]>('/api/rss-sources')).data,
-  });
-}
-export function useToggleRss() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (vars: { id: string; is_active: boolean }) =>
-      (await api.put(`/api/rss-sources/${vars.id}`, { is_active: vars.is_active })).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['rss-sources'] }),
-  });
 }
 
 /** Fetch the digest preview HTML (with auth) and open it in a new window. */

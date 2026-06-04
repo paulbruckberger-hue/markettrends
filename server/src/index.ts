@@ -10,7 +10,6 @@ import { authRouter } from './routes/auth';
 import { watchlistRouter } from './routes/watchlist';
 import { articlesRouter } from './routes/articles';
 import { analyticsRouter } from './routes/analytics';
-import { rssSourcesRouter } from './routes/rssSources';
 import { settingsRouter } from './routes/settings';
 import { digestRouter } from './routes/digest';
 import { webhookRouter } from './routes/webhook';
@@ -50,7 +49,6 @@ async function start(): Promise<void> {
   app.use('/api/watchlist', watchlistRouter);
   app.use('/api/articles', articlesRouter);
   app.use('/api/analytics', analyticsRouter);
-  app.use('/api/rss-sources', rssSourcesRouter);
   app.use('/api/settings', settingsRouter);
   app.use('/api/digest', digestRouter);
 

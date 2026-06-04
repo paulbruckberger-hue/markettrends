@@ -5,7 +5,6 @@ import { contentHash } from '../lib/hash';
 import { matchesQuery } from '../lib/matchesQuery';
 import { classify, AiModel, ClassificationInput } from './ai/classifier';
 import { fetchGoogleNews } from './sources/googleNews';
-import { fetchRssArticles, fetchSingleFeed } from './sources/rssFeeds';
 import { fetchLinkedInPosts } from './sources/apifyLinkedIn';
 import { fetchCompanyPagePosts } from './sources/apifyCompanyPage';
 import { apifyEnabled } from './sources/apifyClient';
@@ -49,21 +48,16 @@ function logSourceError(source: string, term: SearchTermRow, err: unknown): void
   console.error(`[collector] ${source} failed for "${term.query_display}":`, err instanceof Error ? err.message : err);
 }
 
-/** Gather raw candidates from every enabled + implemented source for a term. */
-async function gatherCandidates(term: SearchTermRow): Promise<SourceArticle[]> {
+/** Gather raw candidates from Google News + LinkedIn for a term. */
+async function gatherCandidates(term: SearchTermRow, lookbackDays?: number): Promise<SourceArticle[]> {
   const out: SourceArticle[] = [];
   const cfg = term.sources_config;
   const geo = term.geo_filter as GeoFilter;
   const isCompany = term.type === 'company';
 
   if (cfg.google_news) {
-    try { out.push(...await fetchGoogleNews(term.query_display, geo)); }
+    try { out.push(...await fetchGoogleNews(term.query_display, geo, lookbackDays)); }
     catch (err) { logSourceError('google_news', term, err); }
-  }
-
-  if (cfg.rss) {
-    try { out.push(...await fetchRssArticles(geo)); }
-    catch (err) { logSourceError('rss', term, err); }
   }
 
   if (cfg.linkedin_posts && apifyEnabled()) {
@@ -76,18 +70,14 @@ async function gatherCandidates(term: SearchTermRow): Promise<SourceArticle[]> {
     catch (err) { logSourceError('linkedin_company_page', term, err); }
   }
 
-  if (cfg.newsroom && isCompany && term.company_newsroom_url) {
-    try { out.push(...await fetchSingleFeed(term.company_newsroom_url, `${term.query_display} Newsroom`, 'newsroom')); }
-    catch (err) { logSourceError('newsroom', term, err); }
-  }
-
   return out;
 }
 
 /** Run collection for a single shared search_term. Never throws. */
 export async function collectForSearchTerm(
   term: SearchTermRow,
-  trigger: 'scheduled' | 'manual'
+  trigger: 'scheduled' | 'manual',
+  lookbackDays?: number,
 ): Promise<RunSummary> {
   const [run] = await db.insert(job_runs).values({
     search_term_id: term.id,
@@ -108,7 +98,14 @@ export async function collectForSearchTerm(
     const aiCfg = await getActiveAiConfig();
     const watchType = term.type as WatchType;
 
-    const candidates = await gatherCandidates(term);
+    // Get context hint from the first active subscriber for this term
+    const [sub] = await db.select({ context_hint: watch_items.context_hint })
+      .from(watch_items)
+      .where(and(eq(watch_items.search_term_id, term.id), eq(watch_items.is_active, true)))
+      .limit(1);
+    const contextHint = sub?.context_hint ?? null;
+
+    const candidates = await gatherCandidates(term, lookbackDays);
     summary.articles_found = candidates.length;
 
     // Dedup within this run by content_hash (same URL from multiple sources).
@@ -168,6 +165,7 @@ export async function collectForSearchTerm(
         watchType,
         sourceType: cand.source_type,
         language: aiCfg.language,
+        contextHint,
       };
 
       let result;
