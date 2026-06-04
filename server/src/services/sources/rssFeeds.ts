@@ -20,7 +20,7 @@ interface RssItem {
   creator?: string;
 }
 
-function toArticle(it: RssItem, sourceName: string, sourceType: SourceTypeName, prefiltered: boolean): SourceArticle | null {
+function toArticle(it: RssItem, sourceName: string, sourceType: SourceTypeName, prefiltered: boolean, feedLanguage?: string | null): SourceArticle | null {
   if (!it.link) return null;
   const dateStr = it.isoDate || it.pubDate;
   const published = dateStr ? new Date(dateStr) : null;
@@ -34,6 +34,7 @@ function toArticle(it: RssItem, sourceName: string, sourceType: SourceTypeName, 
     author: it.creator,
     published_at: valid ? published : null,
     prefiltered,
+    source_language: feedLanguage ?? null,
   };
 }
 
@@ -52,7 +53,7 @@ export async function fetchRssArticles(geo: GeoFilter): Promise<SourceArticle[]>
       const parsed = await parser.parseURL(feed.url);
       let count = 0;
       for (const it of (parsed.items as RssItem[] | undefined) ?? []) {
-        const art = toArticle(it, feed.name, 'rss', false);
+        const art = toArticle(it, feed.name, 'rss', false, feed.language);
         if (!art) continue;
         if (art.published_at && art.published_at.getTime() < cutoff) continue;
         out.push(art);
@@ -79,7 +80,7 @@ export async function fetchSingleFeed(url: string, sourceName: string, sourceTyp
     const out: SourceArticle[] = [];
     let count = 0;
     for (const it of (parsed.items as RssItem[] | undefined) ?? []) {
-      const art = toArticle(it, sourceName, sourceType, true);
+      const art = toArticle(it, sourceName, sourceType, true, null);
       if (!art) continue;
       if (art.published_at && art.published_at.getTime() < cutoff) continue;
       out.push(art);

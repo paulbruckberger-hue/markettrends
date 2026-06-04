@@ -72,6 +72,8 @@ export const watch_items = pgTable('watch_items', {
   label: text('label'),                          // Kategorie z.B. "Wettbewerber"
   color: text('color').default('#3B82F6'),
   is_active: boolean('is_active').notNull().default(true),
+  // null = default global schedule (every 6h); 'manual' = never auto-run; '24h' | '168h' = daily/weekly
+  schedule_interval: text('schedule_interval'),
   created_at: timestamp('created_at').defaultNow()
 }, (t) => ({
   uniqSub: unique('uniq_user_term').on(t.user_id, t.search_term_id),
@@ -90,6 +92,7 @@ export const articles = pgTable('articles', {
   raw_excerpt: text('raw_excerpt'),               // gekürzter Originaltext (für Re-Klassifikation)
   author: text('author'),
   reactions: integer('reactions').default(0),     // LinkedIn-Engagement
+  source_language: text('source_language'),       // 'de' | 'en' | null = unknown
   published_at: timestamp('published_at'),
   created_at: timestamp('created_at').defaultNow()
 }, (t) => ({

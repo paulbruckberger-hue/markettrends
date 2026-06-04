@@ -56,6 +56,7 @@ export async function fetchGoogleNews(query: string, geo: GeoFilter): Promise<So
         excerpt: (it.contentSnippet || it.content || '').slice(0, 1000),
         author: it.creator,
         published_at: published && !isNaN(published.getTime()) ? published : null,
+        source_language: geo === 'global' ? 'en' : 'de',
       };
     })
     .filter((a) => !a.published_at || a.published_at.getTime() >= cutoff)

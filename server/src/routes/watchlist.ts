@@ -33,6 +33,7 @@ watchlistRouter.get('/', async (req: AuthedRequest, res: Response) => {
     label: watch_items.label,
     color: watch_items.color,
     is_active: watch_items.is_active,
+    schedule_interval: watch_items.schedule_interval,
     created_at: watch_items.created_at,
     search_term_id: search_terms.id,
     type: search_terms.type,
@@ -153,6 +154,22 @@ watchlistRouter.post('/:id/run', async (req: AuthedRequest, res: Response) => {
   }
   const { mode } = await triggerCollector(wi.search_term_id);
   res.status(202).json({ triggered: true, mode, search_term_id: wi.search_term_id });
+});
+
+// PUT /api/watchlist/:id/schedule  → set schedule_interval per watch-item
+watchlistRouter.put('/:id/schedule', async (req: AuthedRequest, res: Response) => {
+  const VALID = [null, 'manual', '6h', '12h', '24h', '48h', '168h'];
+  const interval: string | null = req.body?.schedule_interval ?? null;
+  if (!VALID.includes(interval)) {
+    res.status(400).json({ error: `Ungültiges Intervall. Erlaubt: ${VALID.filter(Boolean).join(', ')} oder null` });
+    return;
+  }
+  const [updated] = await db.update(watch_items)
+    .set({ schedule_interval: interval })
+    .where(and(eq(watch_items.id, req.params.id), eq(watch_items.user_id, req.user!.id)))
+    .returning();
+  if (!updated) { res.status(404).json({ error: 'Nicht gefunden' }); return; }
+  res.json(updated);
 });
 
 // GET /api/watchlist/:id/run-status  → letzter Job-Run für den search_term

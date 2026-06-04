@@ -15,6 +15,13 @@
       "when": 1780565953689,
       "tag": "0001_open_stone_men",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780568452277,
+      "tag": "0002_cool_toro",
+      "breakpoints": true
     }
   ]
 }

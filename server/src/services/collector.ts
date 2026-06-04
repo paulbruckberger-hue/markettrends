@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '../db/client';
-import { articles, classifications, job_runs, search_terms, settings, users } from '../db/schema';
+import { articles, classifications, job_runs, search_terms, settings, users, watch_items } from '../db/schema';
 import { contentHash } from '../lib/hash';
 import { matchesQuery } from '../lib/matchesQuery';
 import { classify, AiModel, ClassificationInput } from './ai/classifier';
@@ -140,6 +140,7 @@ export async function collectForSearchTerm(
         raw_excerpt: cand.excerpt ?? null,
         author: cand.author ?? null,
         reactions: cand.reactions ?? 0,
+        source_language: cand.source_language ?? null,
         published_at: cand.published_at ?? null,
       }).onConflictDoNothing({ target: articles.content_hash }).returning({ id: articles.id });
 
@@ -226,16 +227,52 @@ export async function collectForSearchTerm(
   return summary;
 }
 
-/** Batch collection over all active search_terms. */
+const SCHEDULE_INTERVAL_HOURS: Record<string, number> = {
+  '1h': 1, '6h': 6, '12h': 12, '24h': 24, '48h': 48, '168h': 168,
+};
+
+/** Check if a search_term is due for a scheduled run based on its subscribers' schedule_interval. */
+async function isDueForRun(term: SearchTermRow): Promise<boolean> {
+  const items = await db.select({ schedule_interval: watch_items.schedule_interval })
+    .from(watch_items)
+    .where(and(eq(watch_items.search_term_id, term.id), eq(watch_items.is_active, true)));
+
+  if (items.length === 0) return false;
+
+  // If any watch_item has the default schedule (null) → always run with global cadence
+  const hasDefault = items.some((wi) => !wi.schedule_interval);
+  if (hasDefault) return true;
+
+  // All 'manual' → skip
+  const allManual = items.every((wi) => wi.schedule_interval === 'manual');
+  if (allManual) return false;
+
+  // Find shortest interval among scheduled items
+  const hours = items
+    .map((wi) => wi.schedule_interval && SCHEDULE_INTERVAL_HOURS[wi.schedule_interval])
+    .filter((h): h is number => typeof h === 'number');
+  if (hours.length === 0) return false;
+  const minHours = Math.min(...hours);
+
+  if (!term.last_run_at) return true;
+  const nextRun = new Date(term.last_run_at.getTime() + minHours * 3_600_000);
+  return nextRun <= new Date();
+}
+
+/** Batch collection over all active search_terms (schedule-aware). */
 export async function collectAll(trigger: 'scheduled' | 'manual'): Promise<RunSummary[]> {
   const terms = await db.select().from(search_terms).where(eq(search_terms.is_active, true));
-  console.log(`[collector] collecting ${terms.length} active search_terms ...`);
+  console.log(`[collector] ${terms.length} active search_terms, checking schedules...`);
   const summaries: RunSummary[] = [];
   for (const term of terms) {
+    const due = trigger === 'manual' || await isDueForRun(term);
+    if (!due) {
+      console.log(`[collector] term "${term.query_display}" → skipped (not due)`);
+      continue;
+    }
     const s = await collectForSearchTerm(term, trigger);
     summaries.push(s);
     console.log(`[collector] term "${term.query_display}" → ${s.status} (new articles: ${s.articles_new}, classifications: ${s.classifications_new})`);
   }
-  // Notifications fan-out → Meilenstein 3.
   return summaries;
 }

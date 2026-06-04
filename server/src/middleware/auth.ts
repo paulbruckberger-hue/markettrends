@@ -8,6 +8,7 @@ export interface AuthedRequest extends Request {
 }
 
 export function signToken(user: AuthUser): string {
+  if (!config.jwtSecret) throw new Error('JWT_SECRET is not configured');
   return jwt.sign(
     { id: user.id, username: user.username, role: user.role },
     config.jwtSecret,
@@ -22,6 +23,7 @@ export function authMiddleware(req: AuthedRequest, res: Response, next: NextFunc
     return;
   }
   try {
+    if (!config.jwtSecret) { res.status(500).json({ error: 'Serverkonfiguration unvollständig' }); return; }
     const payload = jwt.verify(header.slice(7), config.jwtSecret) as AuthUser;
     req.user = { id: payload.id, username: payload.username, role: payload.role };
     next();

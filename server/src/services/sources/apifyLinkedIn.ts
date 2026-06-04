@@ -67,6 +67,7 @@ export function mapLinkedInPost(p: LiPost, sourceType: SourceTypeName, prefilter
     reactions: extractReactions(p),
     published_at: extractDate(p),
     prefiltered,
+    source_language: null,  // LinkedIn is multilingual; detection not reliable without NLP
   };
 }
 

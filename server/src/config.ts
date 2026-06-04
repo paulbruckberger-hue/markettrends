@@ -27,7 +27,9 @@ export const config = {
   clientUrl: optional('CLIENT_URL', 'http://localhost:5173'),
 
   databaseUrl: required('DATABASE_URL'),
-  jwtSecret: required('JWT_SECRET'),
+  // JWT is only needed by the API service, not the collector/newsletter jobs.
+  // We use optional() here and validate in the auth middleware instead.
+  jwtSecret: optional('JWT_SECRET'),
 
   // AI – only the active model needs a key.
   anthropicApiKey: optional('ANTHROPIC_API_KEY'),

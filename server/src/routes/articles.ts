@@ -32,6 +32,7 @@ const feedColumns = {
   source_url: articles.source_url,
   source_type: articles.source_type,
   source_name: articles.source_name,
+  source_language: articles.source_language,
   original_title: articles.original_title,
   author: articles.author,
   reactions: articles.reactions,

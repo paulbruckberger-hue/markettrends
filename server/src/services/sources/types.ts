@@ -12,4 +12,6 @@ export interface SourceArticle {
   published_at?: Date | null;
   /** true if the source is inherently on-topic (company page / newsroom) → skip token pre-filter. */
   prefiltered?: boolean;
+  /** BCP-47 language code of the source (e.g. 'de', 'en'). null = unknown. */
+  source_language?: string | null;
 }

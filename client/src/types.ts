@@ -22,12 +22,15 @@ export interface SourcesConfig {
   newsroom: boolean;
 }
 
+export type ScheduleInterval = null | 'manual' | '6h' | '12h' | '24h' | '48h' | '168h';
+
 export interface WatchItem {
   id: string;
   display_name: string;
   label: string | null;
   color: string | null;
   is_active: boolean;
+  schedule_interval: ScheduleInterval;
   created_at: string | null;
   search_term_id: string;
   type: WatchType;
@@ -55,6 +58,7 @@ export interface FeedItem {
   source_url: string;
   source_type: SourceTypeName;
   source_name: string | null;
+  source_language: string | null;
   original_title: string | null;
   author: string | null;
   reactions: number | null;

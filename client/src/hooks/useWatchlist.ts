@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
-import { GeoFilter, RunStatus, WatchItem, WatchType } from '../types';
+import { GeoFilter, RunStatus, ScheduleInterval, WatchItem, WatchType } from '../types';
 
 export interface CreateWatchInput {
   type: WatchType;
@@ -38,16 +38,36 @@ export function useDeleteWatch() {
 }
 
 export function useRunWatch() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => (await api.post(`/api/watchlist/${id}/run`)).data,
+    onSuccess: (_data, id) => {
+      // Force immediate re-fetch of run-status so polling starts right away
+      void qc.invalidateQueries({ queryKey: ['run-status', id] });
+    },
   });
 }
 
-export function useRunStatus(watchItemId: string | null, enabled: boolean) {
+export function useSetSchedule() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { id: string; interval: ScheduleInterval }) =>
+      (await api.put(`/api/watchlist/${vars.id}/schedule`, { schedule_interval: vars.interval })).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['watchlist'] }),
+  });
+}
+
+export function useRunStatus(watchItemId: string | null, options: { enabled: boolean; fastPoll?: boolean }) {
   return useQuery({
     queryKey: ['run-status', watchItemId],
     queryFn: async () => (await api.get<RunStatus>(`/api/watchlist/${watchItemId}/run-status`)).data,
-    enabled: enabled && !!watchItemId,
-    refetchInterval: (query) => (query.state.data?.status === 'running' ? 2000 : false),
+    enabled: options.enabled && !!watchItemId,
+    refetchInterval: (query) => {
+      const s = query.state.data?.status;
+      if (options.fastPoll) return 2000;           // just triggered – poll fast
+      if (s === 'running') return 2000;             // running – poll fast
+      return false;                                 // idle/done – no auto-poll
+    },
+    staleTime: 0,
   });
 }
