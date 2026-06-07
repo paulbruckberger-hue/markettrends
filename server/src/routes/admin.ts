@@ -2,7 +2,7 @@ import { Router, Response, NextFunction } from 'express';
 import { eq } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
 import { db } from '../db/client';
-import { app_config, users, settings } from '../db/schema';
+import { app_config, users, settings, DEFAULT_RANK_CRITERIA, RankCriteria } from '../db/schema';
 import { authMiddleware, AuthedRequest } from '../middleware/auth';
 
 export const adminRouter = Router();
@@ -23,16 +23,31 @@ adminRouter.use(adminOnly);
 // Config
 // ─────────────────────────────────────────────
 
+function isValidRankCriteria(v: unknown): v is RankCriteria {
+  if (!v || typeof v !== 'object') return false;
+  const obj = v as Record<string, unknown>;
+  for (const lang of ['de', 'en']) {
+    const block = obj[lang];
+    if (!block || typeof block !== 'object') return false;
+    const b = block as Record<string, unknown>;
+    if (typeof b.rank1 !== 'string' || typeof b.rank2 !== 'string' || typeof b.rank3 !== 'string') return false;
+    if (!b.rank1.trim() || !b.rank2.trim() || !b.rank3.trim()) return false;
+  }
+  return true;
+}
+
 // GET /api/admin/config
 adminRouter.get('/config', async (_req, res: Response) => {
   const [cfg] = await db.select().from(app_config).where(eq(app_config.id, 1));
   if (!cfg) {
-    // Ensure row exists, return defaults
     const [created] = await db.insert(app_config).values({ id: 1 }).onConflictDoNothing().returning();
-    res.json(created ?? { id: 1, linkedin_max_posts: 25, linkedin_posted_limit: 'week', google_news_max_results: 20, collector_max_classifications: 30 });
+    res.json(created
+      ? { ...created, rank_criteria: created.rank_criteria ?? DEFAULT_RANK_CRITERIA }
+      : { id: 1, linkedin_max_posts: 25, linkedin_posted_limit: 'week', google_news_max_results: 20, collector_max_classifications: 30, rank_criteria: DEFAULT_RANK_CRITERIA });
     return;
   }
-  res.json(cfg);
+  // Always return rank_criteria, falling back to defaults if not yet set
+  res.json({ ...cfg, rank_criteria: cfg.rank_criteria ?? DEFAULT_RANK_CRITERIA });
 });
 
 // PUT /api/admin/config
@@ -52,11 +67,14 @@ adminRouter.put('/config', async (req: AuthedRequest, res: Response) => {
   if (typeof b.collector_max_classifications === 'number' && b.collector_max_classifications > 0) {
     patch.collector_max_classifications = Math.min(100, Math.round(b.collector_max_classifications));
   }
+  if (isValidRankCriteria(b.rank_criteria)) {
+    patch.rank_criteria = b.rank_criteria;
+  }
 
   // Ensure row exists
   await db.insert(app_config).values({ id: 1 }).onConflictDoNothing();
   const [updated] = await db.update(app_config).set(patch).where(eq(app_config.id, 1)).returning();
-  res.json(updated);
+  res.json({ ...updated, rank_criteria: updated.rank_criteria ?? DEFAULT_RANK_CRITERIA });
 });
 
 // ─────────────────────────────────────────────

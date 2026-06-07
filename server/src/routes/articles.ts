@@ -46,6 +46,7 @@ const feedColumns = {
   is_read: sql<boolean>`COALESCE(${user_article_state.is_read}, false)`,
   is_bookmarked: sql<boolean>`COALESCE(${user_article_state.is_bookmarked}, false)`,
   user_rank_override: user_article_state.user_rank_override,
+  user_feedback: user_article_state.user_feedback,
   watch_item_id: watch_items.id,
   watch_display_name: watch_items.display_name,
   watch_color: watch_items.color,
@@ -59,6 +60,9 @@ articlesRouter.get('/', async (req: AuthedRequest, res: Response) => {
   const watchItemId = typeof req.query.watch_item_id === 'string' ? req.query.watch_item_id : undefined;
   const sourceType = typeof req.query.source_type === 'string' ? req.query.source_type : undefined;
   const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+  const sort = req.query.sort === 'latest' ? 'latest' : 'top';
+  const bookmarkedOnly = req.query.bookmarked === '1' || req.query.bookmarked === 'true';
+  const feedback = req.query.feedback === 'up' || req.query.feedback === 'down' ? req.query.feedback : undefined;
   const cutoff = periodCutoff(req.query.period);
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
@@ -70,12 +74,21 @@ articlesRouter.get('/', async (req: AuthedRequest, res: Response) => {
   if (sourceType && (SOURCE_TYPES as string[]).includes(sourceType)) {
     conditions.push(eq(articles.source_type, sourceType as SourceTypeName));
   }
+  if (bookmarkedOnly) conditions.push(eq(user_article_state.is_bookmarked, true));
+  if (feedback) conditions.push(eq(user_article_state.user_feedback, feedback));
   if (cutoff) conditions.push(gte(articles.published_at, cutoff));
   if (search) {
     const like = `%${search}%`;
     const searchCond = or(ilike(classifications.title, like), ilike(articles.original_title, like));
     if (searchCond) conditions.push(searchCond);
   }
+
+  const orderBy = sort === 'latest'
+    ? [desc(sql`COALESCE(${articles.published_at}, ${articles.created_at})`)]
+    : [
+        asc(sql`COALESCE(${user_article_state.user_rank_override}, ${classifications.rank})`),
+        desc(sql`COALESCE(${articles.published_at}, ${articles.created_at})`),
+      ];
 
   const rows = await db.select(feedColumns)
     .from(watch_items)
@@ -86,10 +99,7 @@ articlesRouter.get('/', async (req: AuthedRequest, res: Response) => {
       eq(user_article_state.user_id, userId),
     ))
     .where(and(...conditions))
-    .orderBy(
-      asc(sql`COALESCE(${user_article_state.user_rank_override}, ${classifications.rank})`),
-      desc(sql`COALESCE(${articles.published_at}, ${articles.created_at})`),
-    )
+    .orderBy(...orderBy)
     .limit(limit + 1)
     .offset(offset);
 
@@ -134,12 +144,15 @@ articlesRouter.patch('/:classificationId', async (req: AuthedRequest, res: Respo
     return;
   }
 
+  const feedbackValid = b.user_feedback === null || b.user_feedback === 'up' || b.user_feedback === 'down';
+
   const set: Record<string, unknown> = { updated_at: new Date() };
   if (typeof b.is_read === 'boolean') set.is_read = b.is_read;
   if (typeof b.is_bookmarked === 'boolean') set.is_bookmarked = b.is_bookmarked;
   if (b.user_rank_override === null || typeof b.user_rank_override === 'number') {
     set.user_rank_override = b.user_rank_override;
   }
+  if (feedbackValid) set.user_feedback = b.user_feedback;
 
   const [state] = await db.insert(user_article_state).values({
     user_id: userId,
@@ -147,6 +160,7 @@ articlesRouter.patch('/:classificationId', async (req: AuthedRequest, res: Respo
     is_read: typeof b.is_read === 'boolean' ? b.is_read : false,
     is_bookmarked: typeof b.is_bookmarked === 'boolean' ? b.is_bookmarked : false,
     user_rank_override: typeof b.user_rank_override === 'number' ? b.user_rank_override : null,
+    user_feedback: feedbackValid ? b.user_feedback : null,
   }).onConflictDoUpdate({
     target: [user_article_state.user_id, user_article_state.classification_id],
     set,

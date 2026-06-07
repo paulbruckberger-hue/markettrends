@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { CheckCircle2, Loader2, Plus, ShieldAlert, ToggleLeft, ToggleRight, UserCog, XCircle } from 'lucide-react';
+import { BookOpen, CheckCircle2, Loader2, Plus, ShieldAlert, ToggleLeft, ToggleRight, UserCog, XCircle } from 'lucide-react';
 import Layout from '../components/Layout';
 import {
   useAdminConfig, useUpdateAdminConfig,
@@ -7,6 +7,7 @@ import {
 } from '../hooks/useAdmin';
 import { apiError } from '../lib/api';
 import { formatDateTime } from '../lib/labels';
+import { DEFAULT_RANK_CRITERIA, RankCriteria } from '../types';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -254,6 +255,104 @@ function UsersSection() {
   );
 }
 
+// ─── Rank Criteria Section ────────────────────────────────────────────────────
+
+const RANK_META = [
+  { key: 'rank1' as const, label: 'Rang 1 🔴', hint: 'Hochrelevant — sofort handlungsrelevant', color: 'border-rose-500/40 bg-rose-500/5' },
+  { key: 'rank2' as const, label: 'Rang 2 🟠', hint: 'Relevant — beobachtenswert', color: 'border-amber-500/40 bg-amber-500/5' },
+  { key: 'rank3' as const, label: 'Rang 3 ⚪', hint: 'Marginale Relevanz', color: 'border-slate-500/40 bg-slate-500/5' },
+];
+
+function RankCriteriaSection() {
+  const { data: cfg, isLoading } = useAdminConfig();
+  const update = useUpdateAdminConfig();
+
+  const [criteria, setCriteria] = useState<RankCriteria>(DEFAULT_RANK_CRITERIA);
+  const [tab, setTab] = useState<'de' | 'en'>('de');
+
+  useEffect(() => {
+    if (cfg?.rank_criteria) setCriteria(cfg.rank_criteria);
+  }, [cfg]);
+
+  const setField = (lang: 'de' | 'en', rank: 'rank1' | 'rank2' | 'rank3', value: string) => {
+    setCriteria((prev) => ({ ...prev, [lang]: { ...prev[lang], [rank]: value } }));
+  };
+
+  const save = () => update.mutate({ rank_criteria: criteria });
+
+  const resetToDefaults = () => setCriteria(DEFAULT_RANK_CRITERIA);
+
+  if (isLoading) return (
+    <Section title="KI-Rang-Kriterien" icon={BookOpen}>
+      <div className="text-slate-400 text-sm">Lade …</div>
+    </Section>
+  );
+
+  return (
+    <Section title="KI-Rang-Kriterien" icon={BookOpen}>
+      <p className="mb-4 text-xs text-slate-400 leading-relaxed">
+        Diese Texte definieren, was die KI als Rang 1, 2 und 3 einordnen soll. Sie werden direkt in den
+        Klassifizierungs-Prompt injiziert. Außerdem lernt die KI automatisch aus deinen Rang-Korrekturen im Feed
+        (letzte 10 Korrekturen werden als Beispiele mitgeliefert).
+      </p>
+
+      {/* Language tabs */}
+      <div className="mb-4 flex gap-1 border-b border-ink-700 pb-0">
+        {(['de', 'en'] as const).map((lang) => (
+          <button
+            key={lang}
+            onClick={() => setTab(lang)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition ${
+              tab === lang ? 'border-accent-400 text-accent-300' : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            {lang === 'de' ? '🇩🇪 Deutsch' : '🇬🇧 English'}
+          </button>
+        ))}
+      </div>
+
+      <div className="space-y-3">
+        {RANK_META.map(({ key, label, hint, color }) => (
+          <div key={key} className={`rounded-lg border p-3 ${color}`}>
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-sm font-semibold text-slate-200">{label}</span>
+              <span className="text-xs text-slate-500">{hint}</span>
+            </div>
+            <textarea
+              value={criteria[tab][key]}
+              onChange={(e) => setField(tab, key, e.target.value)}
+              rows={2}
+              className="w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-slate-100 outline-none focus:border-accent-500 resize-none"
+              placeholder={DEFAULT_RANK_CRITERIA[tab][key]}
+            />
+            <div className="mt-1 text-xs text-slate-600">
+              Standard: <span className="italic">{DEFAULT_RANK_CRITERIA[tab][key]}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-5 flex items-center gap-3 flex-wrap">
+        <button
+          onClick={save}
+          disabled={update.isPending}
+          className="inline-flex items-center gap-2 rounded-lg bg-accent-600 px-5 py-2 text-sm font-semibold text-white hover:bg-accent-500 disabled:opacity-50"
+        >
+          {update.isPending ? <><Loader2 size={14} className="animate-spin" /> Speichern …</> : 'Speichern'}
+        </button>
+        <button
+          onClick={resetToDefaults}
+          className="rounded-lg border border-ink-700 px-4 py-2 text-sm text-slate-300 hover:bg-ink-800"
+        >
+          Zurücksetzen
+        </button>
+        {update.isSuccess && <SaveBadge ok msg="Gespeichert" />}
+        {update.isError && <SaveBadge ok={false} msg={apiError(update.error)} />}
+      </div>
+    </Section>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function AdminPage() {
@@ -262,6 +361,9 @@ export default function AdminPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <ScraperConfigSection />
         <UsersSection />
+      </div>
+      <div className="mt-6">
+        <RankCriteriaSection />
       </div>
     </Layout>
   );

@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { search_terms, watch_items, job_runs } from '../db/schema';
 import { authMiddleware, AuthedRequest } from '../middleware/auth';
@@ -50,7 +50,32 @@ watchlistRouter.get('/', async (req: AuthedRequest, res: Response) => {
     .innerJoin(search_terms, eq(watch_items.search_term_id, search_terms.id))
     .where(eq(watch_items.user_id, req.user!.id))
     .orderBy(desc(watch_items.created_at));
-  res.json(rows);
+
+  // Per-watch aggregates: total signals, unread, 15-day momentum.
+  const uid = req.user!.id;
+  const aggRows = (await db.execute(sql`
+    SELECT wi.id AS watch_item_id,
+      count(c.id)::int AS signals,
+      count(c.id) FILTER (WHERE uas.is_read IS NOT TRUE)::int AS unread,
+      count(c.id) FILTER (WHERE COALESCE(a.published_at, a.created_at) >= now() - interval '15 days')::int AS recent,
+      count(c.id) FILTER (WHERE COALESCE(a.published_at, a.created_at) >= now() - interval '30 days'
+                            AND COALESCE(a.published_at, a.created_at) < now() - interval '15 days')::int AS prior
+    FROM watch_items wi
+    LEFT JOIN classifications c ON c.search_term_id = wi.search_term_id
+    LEFT JOIN articles a ON a.id = c.article_id
+    LEFT JOIN user_article_state uas ON uas.classification_id = c.id AND uas.user_id = ${uid}
+    WHERE wi.user_id = ${uid}
+    GROUP BY wi.id`)).rows as Array<Record<string, unknown>>;
+
+  const n = (v: unknown): number => (typeof v === 'number' ? v : parseInt(String(v ?? 0), 10) || 0);
+  const aggMap = new Map<string, { signals: number; unread: number; momentum: number }>();
+  for (const r of aggRows) {
+    const recent = n(r.recent), prior = n(r.prior);
+    const momentum = prior > 0 ? Math.round(((recent - prior) / prior) * 100) : (recent > 0 ? 100 : 0);
+    aggMap.set(String(r.watch_item_id), { signals: n(r.signals), unread: n(r.unread), momentum });
+  }
+
+  res.json(rows.map((r) => ({ ...r, ...(aggMap.get(r.id) ?? { signals: 0, unread: 0, momentum: 0 }) })));
 });
 
 // POST /api/watchlist  → dedupliziertes search_term + User-Abo

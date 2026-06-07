@@ -1,6 +1,6 @@
-import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { InfiniteData, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
-import { FeedResponse } from '../types';
+import { FeedItem, FeedResponse } from '../types';
 
 export interface FeedFilters {
   rank?: number;
@@ -8,6 +8,9 @@ export interface FeedFilters {
   source_type?: string;
   period?: string;
   search?: string;
+  sort?: 'top' | 'latest';
+  bookmarked?: boolean;
+  feedback?: 'up' | 'down';
 }
 
 function cleanParams(filters: FeedFilters): Record<string, string | number> {
@@ -17,6 +20,9 @@ function cleanParams(filters: FeedFilters): Record<string, string | number> {
   if (filters.source_type) out.source_type = filters.source_type;
   if (filters.period) out.period = filters.period;
   if (filters.search && filters.search.trim()) out.search = filters.search.trim();
+  if (filters.sort) out.sort = filters.sort;
+  if (filters.bookmarked) out.bookmarked = '1';
+  if (filters.feedback) out.feedback = filters.feedback;
   return out;
 }
 
@@ -32,10 +38,16 @@ export function useFeed(filters: FeedFilters) {
   });
 }
 
+/** Flatten an infinite feed query into a single list. */
+export function flattenFeed(data: InfiniteData<FeedResponse> | undefined): FeedItem[] {
+  return data?.pages.flatMap((p) => p.items) ?? [];
+}
+
 export interface ArticlePatch {
   is_read?: boolean;
   is_bookmarked?: boolean;
   user_rank_override?: number | null;
+  user_feedback?: 'up' | 'down' | null;
 }
 
 export function usePatchArticle() {
@@ -43,6 +55,26 @@ export function usePatchArticle() {
   return useMutation({
     mutationFn: async (vars: { id: string; patch: ArticlePatch }) =>
       (await api.patch(`/api/articles/${vars.id}`, vars.patch)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['feed'] }),
+    // Optimistically patch every cached feed page so the UI feels instant.
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: ['feed'] });
+      const snapshots = qc.getQueriesData<InfiniteData<FeedResponse>>({ queryKey: ['feed'] });
+      for (const [key, data] of snapshots) {
+        if (!data) continue;
+        qc.setQueryData<InfiniteData<FeedResponse>>(key, {
+          ...data,
+          pages: data.pages.map((page) => ({
+            ...page,
+            items: page.items.map((it) =>
+              it.classification_id === vars.id ? { ...it, ...vars.patch } : it),
+          })),
+        });
+      }
+      return { snapshots };
+    },
+    onError: (_err, _vars, ctx) => {
+      ctx?.snapshots.forEach(([key, data]) => qc.setQueryData(key, data));
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['feed'] }),
   });
 }

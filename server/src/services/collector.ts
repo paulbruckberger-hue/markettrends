@@ -1,9 +1,9 @@
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, ne, sql } from 'drizzle-orm';
 import { db } from '../db/client';
-import { articles, classifications, job_runs, search_terms, settings, users, watch_items } from '../db/schema';
+import { articles, classifications, job_runs, search_terms, settings, users, user_article_state, watch_items } from '../db/schema';
 import { contentHash } from '../lib/hash';
 import { matchesQuery } from '../lib/matchesQuery';
-import { classify, AiModel, ClassificationInput } from './ai/classifier';
+import { classify, AiModel, ClassificationInput, FewShotExample, RelevanceExample } from './ai/classifier';
 import { fetchGoogleNews } from './sources/googleNews';
 import { fetchLinkedInPosts } from './sources/apifyLinkedIn';
 import { fetchCompanyPagePosts } from './sources/apifyCompanyPage';
@@ -73,6 +73,67 @@ async function gatherCandidates(term: SearchTermRow, lookbackDays?: number, appC
   return out;
 }
 
+/**
+ * Fetch the most recent user rank corrections as few-shot learning examples.
+ * Only includes corrections where the user actually changed the AI's rank.
+ */
+async function loadFewShotExamples(limit = 10): Promise<FewShotExample[]> {
+  try {
+    const rows = await db
+      .select({
+        content: sql<string>`COALESCE(${articles.original_title}, '') || ' ' || COALESCE(${articles.raw_excerpt}, '')`,
+        ai_rank: classifications.rank,
+        user_rank: user_article_state.user_rank_override,
+      })
+      .from(user_article_state)
+      .innerJoin(classifications, eq(classifications.id, user_article_state.classification_id))
+      .innerJoin(articles, eq(articles.id, classifications.article_id))
+      .where(and(
+        isNotNull(user_article_state.user_rank_override),
+        ne(user_article_state.user_rank_override, classifications.rank),
+      ))
+      .orderBy(desc(user_article_state.updated_at))
+      .limit(limit);
+
+    return rows
+      .filter((r) => r.user_rank !== null)
+      .map((r) => ({
+        content: r.content.trim(),
+        ai_rank: r.ai_rank,
+        user_rank: r.user_rank as number,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Fetch recent 👍/👎 relevance feedback (across users — search terms are shared)
+ * to bias the classifier toward what readers actually find relevant.
+ */
+async function loadRelevanceFeedback(limit = 12): Promise<RelevanceExample[]> {
+  try {
+    const rows = await db
+      .select({
+        content: sql<string>`COALESCE(${articles.original_title}, '') || ' ' || COALESCE(${articles.raw_excerpt}, '')`,
+        feedback: user_article_state.user_feedback,
+      })
+      .from(user_article_state)
+      .innerJoin(classifications, eq(classifications.id, user_article_state.classification_id))
+      .innerJoin(articles, eq(articles.id, classifications.article_id))
+      .where(isNotNull(user_article_state.user_feedback))
+      .orderBy(desc(user_article_state.updated_at))
+      .limit(limit);
+
+    return rows
+      .filter((r): r is { content: string; feedback: 'up' | 'down' } =>
+        r.feedback === 'up' || r.feedback === 'down')
+      .map((r) => ({ content: r.content.trim(), feedback: r.feedback }));
+  } catch {
+    return [];
+  }
+}
+
 /** Run collection for a single shared search_term. Never throws. */
 export async function collectForSearchTerm(
   term: SearchTermRow,
@@ -95,7 +156,12 @@ export async function collectForSearchTerm(
   };
 
   try {
-    const [aiCfg, appCfg] = await Promise.all([getActiveAiConfig(), getAppConfig()]);
+    const [aiCfg, appCfg, fewShotExamples, relevanceFeedback] = await Promise.all([
+      getActiveAiConfig(),
+      getAppConfig(),
+      loadFewShotExamples(),
+      loadRelevanceFeedback(),
+    ]);
     const maxClassifications = appCfg.collector_max_classifications;
     const watchType = term.type as WatchType;
 
@@ -178,7 +244,11 @@ export async function collectForSearchTerm(
 
       let result;
       try {
-        result = await classify(input, aiCfg.model, aiCfg.variant);
+        result = await classify(input, aiCfg.model, aiCfg.variant, {
+          rankCriteria: appCfg.rank_criteria,
+          fewShotExamples,
+          relevanceFeedback,
+        });
       } catch (err) {
         console.error(`[collector] classify failed (article ${articleId}):`, err instanceof Error ? err.message : err);
         continue; // skip this article, keep the run alive

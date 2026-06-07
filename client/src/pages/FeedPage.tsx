@@ -34,6 +34,7 @@ export default function FeedPage() {
 
   const toggleRead = (it: FeedItem) => patch.mutate({ id: it.classification_id, patch: { is_read: !it.is_read } });
   const toggleFavorite = (it: FeedItem) => patch.mutate({ id: it.classification_id, patch: { is_bookmarked: !it.is_bookmarked } });
+  const overrideRank = (it: FeedItem, rank: number | null) => patch.mutate({ id: it.classification_id, patch: { user_rank_override: rank } });
 
   const favCount = allItems.filter((it) => it.is_bookmarked).length;
 
@@ -115,7 +116,7 @@ export default function FeedPage() {
 
       <div className="space-y-3 md:space-y-4">
         {items.map((it) => (
-          <ArticleCard key={it.classification_id} item={it} onToggleRead={toggleRead} onToggleFavorite={toggleFavorite} />
+          <ArticleCard key={it.classification_id} item={it} onToggleRead={toggleRead} onToggleFavorite={toggleFavorite} onRankOverride={overrideRank} />
         ))}
       </div>
 

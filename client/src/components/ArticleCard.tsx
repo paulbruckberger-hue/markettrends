@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, ExternalLink, Heart, HeartOff, MessageSquare, Repeat2, ThumbsUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, ExternalLink, Heart, HeartOff, MessageSquare, Repeat2, RotateCcw, ThumbsUp } from 'lucide-react';
 import { FeedItem } from '../types';
 import { formatDate } from '../lib/labels';
 import RankBadge from './RankBadge';
@@ -10,6 +10,7 @@ interface Props {
   item: FeedItem;
   onToggleRead: (item: FeedItem) => void;
   onToggleFavorite: (item: FeedItem) => void;
+  onRankOverride: (item: FeedItem, rank: number | null) => void;
 }
 
 const LANG_FLAG: Record<string, string> = {
@@ -56,10 +57,8 @@ function FullTextToggle({ item }: { item: FeedItem }) {
   const [open, setOpen] = useState(false);
   const text = item.full_text;
   if (!text || text.length < 100) return null;
-  // Only show for LinkedIn where full_text adds real value beyond the excerpt
   const isLinkedIn = item.source_type === 'linkedin_post' || item.source_type === 'linkedin_company';
   if (!isLinkedIn) return null;
-
   return (
     <div className="mt-2">
       <button
@@ -77,7 +76,58 @@ function FullTextToggle({ item }: { item: FeedItem }) {
   );
 }
 
-export default function ArticleCard({ item, onToggleRead, onToggleFavorite }: Props) {
+const RANK_OPTIONS = [
+  { rank: 1, label: 'Rang 1', inactiveCls: 'border-rose-500/40 text-rose-400 hover:bg-rose-500/20', activeCls: 'bg-rose-500/30 border-rose-400 text-rose-200 font-bold' },
+  { rank: 2, label: 'Rang 2', inactiveCls: 'border-amber-500/40 text-amber-400 hover:bg-amber-500/20', activeCls: 'bg-amber-500/30 border-amber-400 text-amber-200 font-bold' },
+  { rank: 3, label: 'Rang 3', inactiveCls: 'border-slate-500/40 text-slate-400 hover:bg-slate-500/20', activeCls: 'bg-slate-500/30 border-slate-400 text-slate-200 font-bold' },
+];
+
+function RankOverridePopover({
+  item,
+  onRankOverride,
+  onClose,
+}: {
+  item: FeedItem;
+  onRankOverride: (item: FeedItem, rank: number | null) => void;
+  onClose: () => void;
+}) {
+  const activeRank = item.user_rank_override ?? item.rank;
+  const hasOverride = item.user_rank_override !== null && item.user_rank_override !== undefined;
+
+  const handleSelect = (rank: number | null) => {
+    onRankOverride(item, rank);
+    onClose();
+  };
+
+  return (
+    <div className="absolute left-0 top-full mt-1.5 z-20 flex items-center gap-1 rounded-lg border border-ink-600 bg-ink-900 p-1.5 shadow-2xl">
+      <span className="px-1 text-xs text-slate-500 shrink-0">Rang:</span>
+      {RANK_OPTIONS.map(({ rank, label, inactiveCls, activeCls }) => (
+        <button
+          key={rank}
+          onClick={() => handleSelect(rank)}
+          className={`rounded border px-2.5 py-1 text-xs transition ${activeRank === rank ? activeCls : inactiveCls}`}
+          title={label}
+        >
+          {rank}
+        </button>
+      ))}
+      {hasOverride && (
+        <button
+          onClick={() => handleSelect(null)}
+          className="ml-0.5 rounded border border-slate-600 p-1 text-slate-400 hover:bg-slate-700 hover:text-slate-200 transition"
+          title="KI-Rang wiederherstellen"
+        >
+          <RotateCcw size={11} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+export default function ArticleCard({ item, onToggleRead, onToggleFavorite, onRankOverride }: Props) {
+  const [rankOpen, setRankOpen] = useState(false);
+
   const bullets = (item.summary || '')
     .split('\n')
     .map((l) => l.replace(/^[•\-*]\s*/, '').trim())
@@ -87,11 +137,37 @@ export default function ArticleCard({ item, onToggleRead, onToggleFavorite }: Pr
     if (!item.is_read) onToggleRead(item);
   };
 
+  const hasOverride = item.user_rank_override !== null && item.user_rank_override !== undefined;
+
   return (
     <article className={`rounded-xl border border-ink-800 bg-ink-850 p-4 md:p-5 transition ${item.is_read ? 'opacity-60' : ''}`}>
       {/* Top row: rank + signal type + watch tag */}
       <div className="mb-2 flex flex-wrap items-center gap-1.5">
-        <RankBadge rank={item.user_rank_override ?? item.rank} />
+        {/* Clickable rank badge with popover */}
+        <div className="relative">
+          <button
+            onClick={() => setRankOpen((v) => !v)}
+            className="inline-flex items-center gap-1 rounded-full focus:outline-none focus:ring-1 focus:ring-accent-500"
+            title="Rang anpassen – klicken zum Ändern"
+          >
+            <RankBadge rank={item.user_rank_override ?? item.rank} />
+            {hasOverride && (
+              <span className="text-xs text-accent-400 leading-none" title="Rang manuell geändert">✎</span>
+            )}
+          </button>
+          {rankOpen && (
+            <>
+              {/* Backdrop to close on outside click */}
+              <div className="fixed inset-0 z-10" onClick={() => setRankOpen(false)} />
+              <RankOverridePopover
+                item={item}
+                onRankOverride={onRankOverride}
+                onClose={() => setRankOpen(false)}
+              />
+            </>
+          )}
+        </div>
+
         {item.signal_type && <SignalTypeBadge signal={item.signal_type} />}
         <span
           className="inline-flex items-center gap-1.5 rounded-full bg-ink-800 px-2 py-0.5 text-xs text-slate-300"
@@ -126,24 +202,17 @@ export default function ArticleCard({ item, onToggleRead, onToggleFavorite }: Pr
         </div>
       )}
 
-      {/* Engagement (LinkedIn only) */}
       <EngagementRow item={item} />
-
-      {/* Full text toggle (LinkedIn only) */}
       <FullTextToggle item={item} />
 
       {/* Footer row */}
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-ink-800 pt-3">
-        {/* Source info */}
         <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
           <SourceBadge type={item.source_type} name={item.source_name} />
           <LangFlag lang={item.source_language} />
           <span>{formatDate(item.published_at)}</span>
           {item.author && (
-            <span
-              className="hidden sm:inline truncate max-w-[200px]"
-              title={item.author_info ?? item.author}
-            >
+            <span className="hidden sm:inline truncate max-w-[200px]" title={item.author_info ?? item.author}>
               · {item.author}
             </span>
           )}
@@ -154,7 +223,6 @@ export default function ArticleCard({ item, onToggleRead, onToggleFavorite }: Pr
           )}
         </div>
 
-        {/* Actions */}
         <div className="flex items-center gap-1">
           <button
             onClick={() => onToggleFavorite(item)}
@@ -164,7 +232,6 @@ export default function ArticleCard({ item, onToggleRead, onToggleFavorite }: Pr
             {item.is_bookmarked ? <Heart size={15} fill="currentColor" /> : <HeartOff size={15} />}
             <span className="hidden sm:inline">{item.is_bookmarked ? 'Favorit' : 'Favorit'}</span>
           </button>
-
           <a
             href={item.source_url}
             target="_blank"

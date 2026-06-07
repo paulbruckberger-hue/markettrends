@@ -42,6 +42,10 @@ export interface WatchItem {
   company_newsroom_url: string | null;
   company_domain: string | null;
   last_run_at: string | null;
+  // Per-watch aggregates (from GET /api/watchlist)
+  signals?: number;
+  unread?: number;
+  momentum?: number;
 }
 
 export interface FeedItem {
@@ -73,6 +77,7 @@ export interface FeedItem {
   is_read: boolean;
   is_bookmarked: boolean;
   user_rank_override: number | null;
+  user_feedback: 'up' | 'down' | null;
   watch_item_id: string;
   watch_display_name: string;
   watch_color: string | null;
@@ -131,12 +136,78 @@ export interface SourcesResponse {
   bySource: { source_type: SourceTypeName; n: number }[];
 }
 
+export interface CompetitorSov {
+  watch_item_id: string;
+  name: string;
+  color: string | null;
+  share: number;
+  up: number;
+  you: boolean;
+}
+
+export interface CompetitorMomentum {
+  name: string;
+  up: number;
+  spark: number[];
+}
+
+export interface CompetitorMove {
+  date: string;
+  rank: number;
+  signal_type: SignalType | null;
+  text: string;
+  src: string;
+}
+
+export interface CompetitorAnalysis {
+  watch_item_id: string;
+  subject: string;
+  domain: string | null;
+  geo: GeoFilter;
+  color: string | null;
+  summary: string;
+  sov: CompetitorSov[];
+  momentum: CompetitorMomentum[];
+  signals: { signal_type: SignalType | null; n: number }[];
+  sentiment: { positive: number; neutral: number; negative: number };
+  moves: CompetitorMove[];
+  strengths: string[];
+  watchouts: string[];
+  aiRivals: string[];
+  ai_used: boolean;
+}
+
+export interface RankCriteriaLang {
+  rank1: string;
+  rank2: string;
+  rank3: string;
+}
+
+export interface RankCriteria {
+  de: RankCriteriaLang;
+  en: RankCriteriaLang;
+}
+
+export const DEFAULT_RANK_CRITERIA: RankCriteria = {
+  de: {
+    rank1: 'hochrelevant: bedeutendes Marktsignal, direkt zum Begriff, handlungsrelevant.',
+    rank2: 'relevant: klarer Bezug, beobachtenswert, aber nicht dringend.',
+    rank3: 'am Rande: schwacher/indirekter Bezug oder generische Nachricht.',
+  },
+  en: {
+    rank1: 'highly relevant: significant market signal, directly related, actionable.',
+    rank2: 'relevant: clear connection, worth watching, not urgent.',
+    rank3: 'marginal: weak/indirect connection or generic news.',
+  },
+};
+
 export interface AppConfig {
   id: number;
   linkedin_max_posts: number;
   linkedin_posted_limit: string;
   google_news_max_results: number;
   collector_max_classifications: number;
+  rank_criteria: RankCriteria;
   updated_at: string | null;
 }
 

@@ -138,6 +138,8 @@ export const user_article_state = pgTable('user_article_state', {
   is_read: boolean('is_read').default(false),
   is_bookmarked: boolean('is_bookmarked').default(false),
   user_rank_override: integer('user_rank_override'),
+  // Relevance feedback that trains the AI ranking: 'up' (more like this) | 'down' (less) | null
+  user_feedback: text('user_feedback').$type<'up' | 'down' | null>(),
   telegram_sent: boolean('telegram_sent').default(false),
   telegram_sent_at: timestamp('telegram_sent_at'),
   updated_at: timestamp('updated_at').defaultNow()
@@ -183,12 +185,31 @@ export const settings = pgTable('settings', {
 });
 
 // ---------- App Config (global, Admin-verwaltet, immer Zeile id=1) ----------
+export interface RankCriteria {
+  de: { rank1: string; rank2: string; rank3: string };
+  en: { rank1: string; rank2: string; rank3: string };
+}
+
+export const DEFAULT_RANK_CRITERIA: RankCriteria = {
+  de: {
+    rank1: 'hochrelevant: bedeutendes Marktsignal, direkt zum Begriff, handlungsrelevant.',
+    rank2: 'relevant: klarer Bezug, beobachtenswert, aber nicht dringend.',
+    rank3: 'am Rande: schwacher/indirekter Bezug oder generische Nachricht.',
+  },
+  en: {
+    rank1: 'highly relevant: significant market signal, directly related, actionable.',
+    rank2: 'relevant: clear connection, worth watching, not urgent.',
+    rank3: 'marginal: weak/indirect connection or generic news.',
+  },
+};
+
 export const app_config = pgTable('app_config', {
   id: integer('id').primaryKey().default(1),
   linkedin_max_posts: integer('linkedin_max_posts').notNull().default(25),
   linkedin_posted_limit: text('linkedin_posted_limit').notNull().default('week'),
   google_news_max_results: integer('google_news_max_results').notNull().default(20),
   collector_max_classifications: integer('collector_max_classifications').notNull().default(30),
+  rank_criteria: jsonb('rank_criteria').$type<RankCriteria>(),
   updated_at: timestamp('updated_at').defaultNow(),
 });
 
