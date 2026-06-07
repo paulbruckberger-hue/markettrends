@@ -123,6 +123,9 @@ export const classifications = pgTable('classifications', {
   signal_type: signalTypeEnum('signal_type'),   // nur bei type='company' gesetzt
 
   ai_model_used: text('ai_model_used'),
+  // Version of the ranking prompt that produced this rank. Lets us re-rank
+  // only the rows produced by an older prompt (resumable bulk rerank).
+  rank_prompt_version: integer('rank_prompt_version').notNull().default(0),
   created_at: timestamp('created_at').defaultNow()
 }, (t) => ({
   uniqClass: unique('uniq_article_term').on(t.article_id, t.search_term_id),
@@ -140,6 +143,11 @@ export const user_article_state = pgTable('user_article_state', {
   user_rank_override: integer('user_rank_override'),
   // Relevance feedback that trains the AI ranking: 'up' (more like this) | 'down' (less) | null
   user_feedback: text('user_feedback').$type<'up' | 'down' | null>(),
+  // Per-user AI-personalised rank, learned from THIS user's 👍/👎 feedback.
+  // Effective rank precedence in the feed: user_rank_override > personal_rank > classifications.rank
+  personal_rank: integer('personal_rank'),
+  personal_rank_reason: text('personal_rank_reason'),
+  personal_rank_at: timestamp('personal_rank_at'),
   telegram_sent: boolean('telegram_sent').default(false),
   telegram_sent_at: timestamp('telegram_sent_at'),
   updated_at: timestamp('updated_at').defaultNow()

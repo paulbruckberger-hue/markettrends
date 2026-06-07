@@ -53,3 +53,27 @@ export function useUpdateUser() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }),
   });
 }
+
+// ── Rerank (re-rank existing articles with current prompt + per-user ranks) ───
+
+export interface RerankProgress { total: number; done: number; remaining: number; version: number }
+export interface RerankBatchResult { processed: number; personalised: number; remaining: number; done: boolean }
+
+export function useRerankStatus() {
+  return useQuery({
+    queryKey: ['admin-rerank'],
+    queryFn: async () => (await api.get<RerankProgress>('/api/admin/rerank')).data,
+  });
+}
+
+export function useRerankBatch() {
+  const qc = useQueryClient();
+  return useMutation<RerankBatchResult, Error, number>({
+    mutationFn: async (limit: number) =>
+      (await api.post<RerankBatchResult>('/api/admin/rerank', { limit })).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-rerank'] });
+      qc.invalidateQueries({ queryKey: ['feed'] });
+    },
+  });
+}

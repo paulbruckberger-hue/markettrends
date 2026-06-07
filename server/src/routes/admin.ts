@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { db } from '../db/client';
 import { app_config, users, settings, DEFAULT_RANK_CRITERIA, RankCriteria } from '../db/schema';
 import { authMiddleware, AuthedRequest } from '../middleware/auth';
+import { rerankBatch, rerankStatus } from '../services/rerank';
 
 export const adminRouter = Router();
 
@@ -142,4 +143,23 @@ adminRouter.put('/users/:id', async (req: AuthedRequest, res: Response) => {
     return;
   }
   res.json(updated);
+});
+
+// ─────────────────────────────────────────────
+// Rerank (re-classify existing articles with the current prompt + per-user ranks)
+// ─────────────────────────────────────────────
+
+// GET /api/admin/rerank → progress counts
+adminRouter.get('/rerank', async (_req, res: Response) => {
+  res.json(await rerankStatus());
+});
+
+// POST /api/admin/rerank → process one batch (call repeatedly until done)
+adminRouter.post('/rerank', async (req: AuthedRequest, res: Response) => {
+  const limit = typeof req.body?.limit === 'number' ? req.body.limit : 20;
+  try {
+    res.json(await rerankBatch(limit));
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Rerank fehlgeschlagen' });
+  }
 });

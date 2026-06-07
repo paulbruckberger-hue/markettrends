@@ -1,9 +1,10 @@
-import { and, desc, eq, isNotNull, ne, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '../db/client';
-import { articles, classifications, job_runs, search_terms, settings, users, user_article_state, watch_items } from '../db/schema';
+import { articles, classifications, job_runs, search_terms, watch_items } from '../db/schema';
 import { contentHash } from '../lib/hash';
 import { matchesQuery } from '../lib/matchesQuery';
-import { classify, AiModel, ClassificationInput, FewShotExample, RelevanceExample } from './ai/classifier';
+import { classify, ClassificationInput, RANK_PROMPT_VERSION } from './ai/classifier';
+import { getActiveAiConfig, loadGlobalFewShot, makePersonalizeContext, personalizeClassification } from './personalize';
 import { fetchGoogleNews } from './sources/googleNews';
 import { fetchLinkedInPosts } from './sources/apifyLinkedIn';
 import { fetchCompanyPagePosts } from './sources/apifyCompanyPage';
@@ -24,23 +25,6 @@ export interface RunSummary {
 }
 
 type SearchTermRow = typeof search_terms.$inferSelect;
-
-/**
- * Determine which AI model/variant to use for the (shared) classification.
- * MVP is single-user, so we read the admin's settings; falls back to Claude.
- */
-async function getActiveAiConfig(): Promise<{ model: AiModel; variant?: string; language: string }> {
-  const [admin] = await db.select().from(users).where(eq(users.role, 'admin'));
-  if (admin) {
-    const [s] = await db.select().from(settings).where(eq(settings.user_id, admin.id));
-    if (s) return {
-      model: s.ai_model as AiModel,
-      variant: s.ai_model_variant ?? undefined,
-      language: s.language ?? 'de',
-    };
-  }
-  return { model: 'claude', language: 'de' };
-}
 
 function logSourceError(source: string, term: SearchTermRow, err: unknown): void {
   console.error(`[collector] ${source} failed for "${term.query_display}":`, err instanceof Error ? err.message : err);
@@ -73,67 +57,6 @@ async function gatherCandidates(term: SearchTermRow, lookbackDays?: number, appC
   return out;
 }
 
-/**
- * Fetch the most recent user rank corrections as few-shot learning examples.
- * Only includes corrections where the user actually changed the AI's rank.
- */
-async function loadFewShotExamples(limit = 10): Promise<FewShotExample[]> {
-  try {
-    const rows = await db
-      .select({
-        content: sql<string>`COALESCE(${articles.original_title}, '') || ' ' || COALESCE(${articles.raw_excerpt}, '')`,
-        ai_rank: classifications.rank,
-        user_rank: user_article_state.user_rank_override,
-      })
-      .from(user_article_state)
-      .innerJoin(classifications, eq(classifications.id, user_article_state.classification_id))
-      .innerJoin(articles, eq(articles.id, classifications.article_id))
-      .where(and(
-        isNotNull(user_article_state.user_rank_override),
-        ne(user_article_state.user_rank_override, classifications.rank),
-      ))
-      .orderBy(desc(user_article_state.updated_at))
-      .limit(limit);
-
-    return rows
-      .filter((r) => r.user_rank !== null)
-      .map((r) => ({
-        content: r.content.trim(),
-        ai_rank: r.ai_rank,
-        user_rank: r.user_rank as number,
-      }));
-  } catch {
-    return [];
-  }
-}
-
-/**
- * Fetch recent 👍/👎 relevance feedback (across users — search terms are shared)
- * to bias the classifier toward what readers actually find relevant.
- */
-async function loadRelevanceFeedback(limit = 12): Promise<RelevanceExample[]> {
-  try {
-    const rows = await db
-      .select({
-        content: sql<string>`COALESCE(${articles.original_title}, '') || ' ' || COALESCE(${articles.raw_excerpt}, '')`,
-        feedback: user_article_state.user_feedback,
-      })
-      .from(user_article_state)
-      .innerJoin(classifications, eq(classifications.id, user_article_state.classification_id))
-      .innerJoin(articles, eq(articles.id, classifications.article_id))
-      .where(isNotNull(user_article_state.user_feedback))
-      .orderBy(desc(user_article_state.updated_at))
-      .limit(limit);
-
-    return rows
-      .filter((r): r is { content: string; feedback: 'up' | 'down' } =>
-        r.feedback === 'up' || r.feedback === 'down')
-      .map((r) => ({ content: r.content.trim(), feedback: r.feedback }));
-  } catch {
-    return [];
-  }
-}
-
 /** Run collection for a single shared search_term. Never throws. */
 export async function collectForSearchTerm(
   term: SearchTermRow,
@@ -156,11 +79,13 @@ export async function collectForSearchTerm(
   };
 
   try {
-    const [aiCfg, appCfg, fewShotExamples, relevanceFeedback] = await Promise.all([
-      getActiveAiConfig(),
+    // Base classification uses objective relevance + global rank-correction
+    // calibration only. Per-user 👍/👎 preferences are applied afterwards as a
+    // separate per-user re-rank (personalizeClassification).
+    const [appCfg, fewShotExamples, pctx] = await Promise.all([
       getAppConfig(),
-      loadFewShotExamples(),
-      loadRelevanceFeedback(),
+      loadGlobalFewShot(),
+      makePersonalizeContext(),
     ]);
     const maxClassifications = appCfg.collector_max_classifications;
     const watchType = term.type as WatchType;
@@ -238,23 +163,22 @@ export async function collectForSearchTerm(
         searchQuery: term.query_display,
         watchType,
         sourceType: cand.source_type,
-        language: aiCfg.language,
+        language: pctx.language,
         contextHint,
       };
 
       let result;
       try {
-        result = await classify(input, aiCfg.model, aiCfg.variant, {
+        result = await classify(input, pctx.model, pctx.variant, {
           rankCriteria: appCfg.rank_criteria,
           fewShotExamples,
-          relevanceFeedback,
         });
       } catch (err) {
         console.error(`[collector] classify failed (article ${articleId}):`, err instanceof Error ? err.message : err);
         continue; // skip this article, keep the run alive
       }
 
-      await db.insert(classifications).values({
+      const [insertedCls] = await db.insert(classifications).values({
         article_id: articleId,
         search_term_id: term.id,
         title: result.title,
@@ -264,10 +188,30 @@ export async function collectForSearchTerm(
         sentiment: result.sentiment,
         tags: result.tags,
         signal_type: watchType === 'company' ? (result.signal_type ?? 'general') : null,
-        ai_model_used: aiCfg.variant ?? aiCfg.model,
-      }).onConflictDoNothing({ target: [classifications.article_id, classifications.search_term_id] });
+        ai_model_used: pctx.variant ?? pctx.model,
+        rank_prompt_version: RANK_PROMPT_VERSION,
+      }).onConflictDoNothing({ target: [classifications.article_id, classifications.search_term_id] })
+        .returning({ id: classifications.id });
 
       summary.classifications_new++;
+
+      // Per-user personalisation: re-rank this signal for each subscriber who
+      // has given feedback, learning from THAT user's own 👍/👎.
+      if (insertedCls) {
+        try {
+          await personalizeClassification({
+            ctx: pctx,
+            classificationId: insertedCls.id,
+            searchTermId: term.id,
+            content: input.content,
+            searchQuery: term.query_display,
+            watchType,
+            baseRank: result.rank,
+          });
+        } catch (err) {
+          console.error(`[collector] personalize failed (article ${articleId}):`, err instanceof Error ? err.message : err);
+        }
+      }
     }
 
     await db.update(job_runs).set({

@@ -21,8 +21,10 @@ const feedColumns = {
   classification_id: classifications.id,
   title: classifications.title,
   summary: classifications.summary,
-  rank: classifications.rank,
-  rank_reason: classifications.rank_reason,
+  // Effective rank shown to THIS user: manual override > per-user personalised > shared base.
+  rank: sql<number>`COALESCE(${user_article_state.user_rank_override}, ${user_article_state.personal_rank}, ${classifications.rank})`,
+  ai_rank: classifications.rank,
+  rank_reason: sql<string>`COALESCE(${user_article_state.personal_rank_reason}, ${classifications.rank_reason})`,
   sentiment: classifications.sentiment,
   tags: classifications.tags,
   signal_type: classifications.signal_type,
@@ -86,7 +88,7 @@ articlesRouter.get('/', async (req: AuthedRequest, res: Response) => {
   const orderBy = sort === 'latest'
     ? [desc(sql`COALESCE(${articles.published_at}, ${articles.created_at})`)]
     : [
-        asc(sql`COALESCE(${user_article_state.user_rank_override}, ${classifications.rank})`),
+        asc(sql`COALESCE(${user_article_state.user_rank_override}, ${user_article_state.personal_rank}, ${classifications.rank})`),
         desc(sql`COALESCE(${articles.published_at}, ${articles.created_at})`),
       ];
 

@@ -1,4 +1,4 @@
-import { CSSProperties, FormEvent, ReactNode, useEffect, useState } from 'react';
+import { CSSProperties, FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
 import { Icon, IconName } from './Icon';
 import { Panel, SectionLabel, Spinner } from './ui';
 import { apiError } from '../lib/api';
@@ -9,8 +9,8 @@ import {
   useTestEmail, useTestTelegram, useUpdateSettings,
 } from '../hooks/useSettings';
 import {
-  CreateUserInput, useAdminConfig, useAdminUsers, useCreateUser,
-  useUpdateAdminConfig, useUpdateUser,
+  CreateUserInput, RerankBatchResult, useAdminConfig, useAdminUsers, useCreateUser,
+  useRerankBatch, useRerankStatus, useUpdateAdminConfig, useUpdateUser,
 } from '../hooks/useAdmin';
 import { AiModel, DEFAULT_RANK_CRITERIA, RankCriteria } from '../types';
 
@@ -459,6 +459,62 @@ function UsersSection() {
   );
 }
 
+// ─────────────────────────────── Reranking ───────────────────────────────
+function RerankSection() {
+  const { data: status, refetch } = useRerankStatus();
+  const batch = useRerankBatch();
+  const [running, setRunning] = useState(false);
+  const [last, setLast] = useState<RerankBatchResult | null>(null);
+  const [doneRuns, setDoneRuns] = useState(0); // classifications processed in this run
+  const stop = useRef(false);
+
+  const total = status?.total ?? 0;
+  const remaining = status?.remaining ?? 0;
+  const done = total - remaining;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  const run = async () => {
+    setRunning(true); stop.current = false; setDoneRuns(0);
+    try {
+      // Loop batches until the backend reports nothing stale left.
+      // Each call re-ranks up to 20 articles + recomputes per-user ranks.
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        if (stop.current) break;
+        const r = await batch.mutateAsync(20);
+        setLast(r);
+        setDoneRuns((n) => n + r.processed);
+        if (r.done || r.processed === 0) break;
+      }
+    } catch { /* error surfaced via batch.isError */ }
+    finally { setRunning(false); await refetch(); }
+  };
+
+  return (
+    <Panel title="Reranking (Bestand neu bewerten)">
+      <p style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.5, margin: '0 0 12px' }}>
+        Bewertet alle bestehenden Artikel mit dem aktuellen Ranking-Prompt neu und berechnet
+        für jeden Nutzer mit 👍/👎-Feedback einen personalisierten Rang. Läuft in Schüben — lass den Tab offen.
+      </p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
+        <span style={{ color: 'var(--text-2)' }}>Fortschritt</span>
+        <span className="tabular" style={{ fontWeight: 700 }}>{done} / {total} · {remaining} offen</span>
+      </div>
+      <div style={{ height: 8, background: 'var(--chip)', borderRadius: 999, overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${pct}%`, background: 'var(--accent)', borderRadius: 999, transition: 'width .3s' }} />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14, flexWrap: 'wrap' }}>
+        {!running
+          ? <AccentBtn onClick={run} disabled={total === 0}>{remaining > 0 ? 'Reranking starten' : 'Erneut durchlaufen'}</AccentBtn>
+          : <GhostBtn icon="close" onClick={() => { stop.current = true; }}>Stoppen</GhostBtn>}
+        {running && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-2)' }}><Spinner size={16} /> läuft … {doneRuns} bewertet</span>}
+        {!running && last && <ResultBadge ok msg={`Fertig: ${last.remaining === 0 ? 'alle aktuell' : last.remaining + ' offen'}`} />}
+        {batch.isError && <ResultBadge ok={false} msg={apiError(batch.error)} />}
+      </div>
+    </Panel>
+  );
+}
+
 export default function AdminSections() {
   const { data: s } = useSettings();
   if (!s) {
@@ -473,6 +529,8 @@ export default function AdminSections() {
       </div>
       <SectionLabel>Versand</SectionLabel>
       <div style={{ padding: '0 16px 8px' }}><NewsletterSection /></div>
+      <SectionLabel>Ranking</SectionLabel>
+      <div style={{ padding: '0 16px 8px' }}><RerankSection /></div>
       <SectionLabel>App-Konfiguration</SectionLabel>
       <div style={{ padding: '0 16px 8px', display: 'flex', flexDirection: 'column', gap: 14 }}>
         <ScraperSection />
