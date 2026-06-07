@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Delta, Empty, Spinner, Tabs, TopBar } from '../components/ui';
 import { Icon } from '../components/Icon';
 import { GEO_META } from '../lib/presenter';
-import { useRunWatch, useWatchlist } from '../hooks/useWatchlist';
+import { useDeleteWatch, useRunWatch, useWatchlist } from '../hooks/useWatchlist';
 import { WatchItem } from '../types';
 
 type Nav = (name: string, params?: Record<string, unknown>) => void;
@@ -19,6 +19,7 @@ export default function WatchlistScreen({ nav, onCompose, flash }: {
   const [tab, setTab] = useState<'all' | 'topic' | 'company'>('all');
   const { data: watches, isLoading } = useWatchlist();
   const run = useRunWatch();
+  const del = useDeleteWatch();
 
   let list = watches ?? [];
   if (tab === 'topic') list = list.filter((w) => w.type === 'topic');
@@ -27,6 +28,11 @@ export default function WatchlistScreen({ nav, onCompose, flash }: {
   const triggerRun = (id: string) => {
     run.mutate({ id });
     flash('Abruf gestartet …');
+  };
+
+  const triggerDelete = (w: WatchItem) => {
+    if (!window.confirm(`Beobachtung „${w.display_name}" löschen? Deine Signale dazu verschwinden aus dem Feed.`)) return;
+    del.mutate(w.id, { onSuccess: () => flash('Beobachtung gelöscht') });
   };
 
   return (
@@ -93,6 +99,10 @@ export default function WatchlistScreen({ nav, onCompose, flash }: {
                   <button className="press" onClick={(e) => { e.stopPropagation(); triggerRun(w.id); }}
                     style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12.5, fontWeight: 700, color: 'var(--text)', padding: '5px 10px', borderRadius: 999, border: '1px solid var(--border-strong)', background: 'transparent', cursor: 'pointer' }}>
                     <Icon name="play" size={12} /> Abrufen
+                  </button>
+                  <button className="press" title="Löschen" onClick={(e) => { e.stopPropagation(); triggerDelete(w); }}
+                    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: 999, border: '1px solid var(--border-strong)', background: 'transparent', color: 'var(--neg)', cursor: 'pointer' }}>
+                    <Icon name="trash" size={14} />
                   </button>
                 </div>
               </div>

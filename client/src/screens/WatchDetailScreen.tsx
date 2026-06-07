@@ -2,7 +2,7 @@ import { Delta, DetailBar, Empty, FeedCard, ItemActions, Spinner } from '../comp
 import { Icon } from '../components/Icon';
 import { GEO_META, toDisplayItem } from '../lib/presenter';
 import { flattenFeed, useFeed } from '../hooks/useArticles';
-import { useRunWatch, useWatchlist } from '../hooks/useWatchlist';
+import { useDeleteWatch, useRunWatch, useWatchlist } from '../hooks/useWatchlist';
 
 type Nav = (name: string, params?: Record<string, unknown>) => void;
 
@@ -12,7 +12,13 @@ export default function WatchDetailScreen({ id, actions, nav, back, flash }: {
   const { data: watches } = useWatchlist();
   const feed = useFeed({ watch_item_id: id });
   const run = useRunWatch();
+  const del = useDeleteWatch();
   const w = (watches ?? []).find((x) => x.id === id);
+
+  const onDelete = () => {
+    if (!w || !window.confirm(`Beobachtung „${w.display_name}" löschen?`)) return;
+    del.mutate(w.id, { onSuccess: () => { flash('Beobachtung gelöscht'); back(); } });
+  };
   const items = flattenFeed(feed.data).map(toDisplayItem);
 
   if (!w) {
@@ -26,9 +32,14 @@ export default function WatchDetailScreen({ id, actions, nav, back, flash }: {
   return (
     <>
       <DetailBar title={w.display_name} back={back} right={
-        <button className="iconbtn" style={{ color: 'var(--accent)' }} onClick={() => { run.mutate({ id }); flash('Abruf gestartet …'); }}>
-          <Icon name="refresh" size={19} />
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <button className="iconbtn" style={{ color: 'var(--accent)' }} onClick={() => { run.mutate({ id }); flash('Abruf gestartet …'); }}>
+            <Icon name="refresh" size={19} />
+          </button>
+          <button className="iconbtn" style={{ color: 'var(--neg)' }} title="Löschen" onClick={onDelete}>
+            <Icon name="trash" size={19} />
+          </button>
+        </div>
       } />
       <div>
         <div style={{ padding: '14px 16px' }}>

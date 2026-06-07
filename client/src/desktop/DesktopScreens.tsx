@@ -11,7 +11,7 @@ import {
 } from '../lib/presenter';
 import { SOURCE_LABELS } from '../lib/labels';
 import { flattenFeed, useFeed } from '../hooks/useArticles';
-import { useRunWatch, useWatchlist } from '../hooks/useWatchlist';
+import { useDeleteWatch, useRunWatch, useWatchlist } from '../hooks/useWatchlist';
 import { useOverview, useWatchAnalytics } from '../hooks/useAnalytics';
 import { useCompetitor } from '../hooks/useCompetitor';
 import { useSettings } from '../hooks/useSettings';
@@ -151,7 +151,7 @@ function scheduleLabel(w: WatchItem): string {
   return 'alle ' + w.schedule_interval;
 }
 
-function WatchCard({ w, nav, onRun }: { w: WatchItem; nav: Nav; onRun: (id: string) => void }) {
+function WatchCard({ w, nav, onRun, onDelete }: { w: WatchItem; nav: Nav; onRun: (id: string) => void; onDelete: (w: WatchItem) => void }) {
   const color = w.color || '#1d9bf0';
   const geo = GEO_META[w.geo_filter];
   return (
@@ -188,6 +188,10 @@ function WatchCard({ w, nav, onRun }: { w: WatchItem; nav: Nav; onRun: (id: stri
               style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 700, color: 'var(--text)', padding: '4px 9px', borderRadius: 999, border: '1px solid var(--border-strong)', background: 'transparent', cursor: 'pointer' }}>
               <Icon name="play" size={11} /> Abrufen
             </button>
+            <button className="press" title="Löschen" onClick={(e) => { e.stopPropagation(); onDelete(w); }}
+              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 999, border: '1px solid var(--border-strong)', background: 'transparent', color: 'var(--neg)', cursor: 'pointer' }}>
+              <Icon name="trash" size={13} />
+            </button>
           </div>
         </div>
       </div>
@@ -199,11 +203,16 @@ export function DeskWatchlist({ nav, onCompose, flash }: { nav: Nav; onCompose: 
   const [tab, setTab] = useState<'all' | 'topic' | 'company'>('all');
   const { data: watches, isLoading } = useWatchlist();
   const run = useRunWatch();
+  const del = useDeleteWatch();
   let list = watches ?? [];
   if (tab === 'topic') list = list.filter((w) => w.type === 'topic');
   if (tab === 'company') list = list.filter((w) => w.type === 'company');
 
   const onRun = (id: string) => { run.mutate({ id }); flash('Abruf gestartet …'); };
+  const onDelete = (w: WatchItem) => {
+    if (!window.confirm(`Beobachtung „${w.display_name}" löschen? Deine Signale dazu verschwinden aus dem Feed.`)) return;
+    del.mutate(w.id, { onSuccess: () => flash('Beobachtung gelöscht') });
+  };
 
   return (
     <>
@@ -216,7 +225,7 @@ export function DeskWatchlist({ nav, onCompose, flash }: { nav: Nav; onCompose: 
           <Empty icon="watchlist" title="Noch keine Beobachtungen" body="Lege ein Thema oder Unternehmen an, das du beobachten möchtest." />
         )}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(285px, 1fr))', gap: 14, padding: 18 }}>
-          {list.map((w) => <WatchCard key={w.id} w={w} nav={nav} onRun={onRun} />)}
+          {list.map((w) => <WatchCard key={w.id} w={w} nav={nav} onRun={onRun} onDelete={onDelete} />)}
           {!isLoading && (
             <button className="press" onClick={onCompose} style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, minHeight: 150,
@@ -500,6 +509,11 @@ export function DeskCompetitor({ id, actions, nav, back, onCompose }: {
   const [tab, setTab] = useState<'overview' | 'rivals' | 'moves'>('overview');
   const { data: d, isLoading } = useCompetitor(id);
   const { data: feedData } = useFeed({ watch_item_id: id });
+  const del = useDeleteWatch();
+  const onDelete = () => {
+    if (!window.confirm(`Beobachtung „${d?.subject ?? ''}" löschen?`)) return;
+    del.mutate(id, { onSuccess: back });
+  };
 
   if (isLoading) return (<><DeskHeader title="Wettbewerb" onBack={back} /><div style={{ display: 'flex', justifyContent: 'center', padding: '54px 0' }}><Spinner /></div></>);
   if (!d) return (<><DeskHeader title="Unternehmen" onBack={back} /><Empty icon="swords" title="Keine Wettbewerbsdaten" body="Für diese Beobachtung liegen noch keine Vergleichsdaten vor." /></>);
@@ -515,7 +529,12 @@ export function DeskCompetitor({ id, actions, nav, back, onCompose }: {
   return (
     <>
       <DeskHeader title={d.subject} onBack={back}
-        right={<button className="iconbtn" style={{ color: 'var(--accent)' }}><Icon name="bell" size={19} /></button>}
+        right={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <button className="iconbtn" style={{ color: 'var(--accent)' }}><Icon name="bell" size={19} /></button>
+            <button className="iconbtn" style={{ color: 'var(--neg)' }} title="Löschen" onClick={onDelete}><Icon name="trash" size={19} /></button>
+          </div>
+        }
         sub={<Tabs active={tab} onChange={(k) => setTab(k as typeof tab)} tabs={[{ key: 'overview', label: 'Überblick' }, { key: 'rivals', label: 'Konkurrenten' }, { key: 'moves', label: 'Bewegungen' }]} />} />
       <div className="dt-scroll scroll" style={{ flex: 1 }}>
         <div style={{ padding: '16px 22px 4px' }}>
@@ -685,8 +704,14 @@ export function DeskWatchDetail({ id, actions, nav, back, flash }: {
   const { data: watches } = useWatchlist();
   const feed = useFeed({ watch_item_id: id });
   const run = useRunWatch();
+  const del = useDeleteWatch();
   const w = (watches ?? []).find((x) => x.id === id);
   const items = flattenFeed(feed.data).map(toDisplayItem);
+
+  const onDelete = () => {
+    if (!w || !window.confirm(`Beobachtung „${w.display_name}" löschen?`)) return;
+    del.mutate(w.id, { onSuccess: () => { flash('Beobachtung gelöscht'); back(); } });
+  };
 
   if (!w) return (<><DeskHeader title="Beobachtung" onBack={back} /><div style={{ display: 'flex', justifyContent: 'center', padding: '54px 0' }}><Spinner /></div></>);
   const color = w.color || '#1d9bf0';
@@ -697,7 +722,12 @@ export function DeskWatchDetail({ id, actions, nav, back, flash }: {
   return (
     <>
       <DeskHeader title={w.display_name} onBack={back}
-        right={<button className="iconbtn" style={{ color: 'var(--accent)' }} onClick={() => { run.mutate({ id }); flash('Abruf gestartet …'); }}><Icon name="refresh" size={19} /></button>} />
+        right={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <button className="iconbtn" style={{ color: 'var(--accent)' }} onClick={() => { run.mutate({ id }); flash('Abruf gestartet …'); }}><Icon name="refresh" size={19} /></button>
+            <button className="iconbtn" style={{ color: 'var(--neg)' }} title="Löschen" onClick={onDelete}><Icon name="trash" size={19} /></button>
+          </div>
+        } />
       <div className="dt-scroll scroll" style={{ flex: 1 }}>
         <div style={{ padding: '16px 22px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>

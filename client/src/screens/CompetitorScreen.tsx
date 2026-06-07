@@ -7,6 +7,7 @@ import { Icon } from '../components/Icon';
 import { GEO_META, RANK_META, SIGNAL_META, toDisplayItem } from '../lib/presenter';
 import { flattenFeed, useFeed } from '../hooks/useArticles';
 import { useCompetitor } from '../hooks/useCompetitor';
+import { useDeleteWatch } from '../hooks/useWatchlist';
 import { SignalType } from '../types';
 
 type Nav = (name: string, params?: Record<string, unknown>) => void;
@@ -18,6 +19,11 @@ export default function CompetitorScreen({ id, actions, nav, back, onCompose }: 
   const [tab, setTab] = useState<'overview' | 'rivals' | 'moves'>('overview');
   const { data: d, isLoading } = useCompetitor(id);
   const { data: feedData } = useFeed({ watch_item_id: id });
+  const del = useDeleteWatch();
+  const onDelete = () => {
+    if (!window.confirm(`Beobachtung „${d?.subject ?? ''}" löschen?`)) return;
+    del.mutate(id, { onSuccess: back });
+  };
 
   if (isLoading) {
     return (<><DetailBar title="Wettbewerb" back={back} /><div style={{ display: 'flex', justifyContent: 'center', padding: '54px 0' }}><Spinner /></div></>);
@@ -36,7 +42,12 @@ export default function CompetitorScreen({ id, actions, nav, back, onCompose }: 
 
   return (
     <>
-      <DetailBar title={d.subject} back={back} right={<button className="iconbtn" style={{ color: 'var(--accent)' }}><Icon name="bell" size={19} /></button>} />
+      <DetailBar title={d.subject} back={back} right={
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <button className="iconbtn" style={{ color: 'var(--accent)' }}><Icon name="bell" size={19} /></button>
+          <button className="iconbtn" style={{ color: 'var(--neg)' }} title="Löschen" onClick={onDelete}><Icon name="trash" size={19} /></button>
+        </div>
+      } />
 
       <div style={{ padding: '14px 16px 0' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 13 }}>

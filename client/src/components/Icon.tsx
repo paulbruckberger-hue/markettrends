@@ -117,6 +117,12 @@ const ICONS: Record<string, Builder> = {
     P('M4 4h3l9 9-3 3-9-9V4z', { fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinejoin: 'round' }),
     P('M20 4h-3l-9 9 3 3 9-9V4z', { fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinejoin: 'round' }),
   ],
+  trash: () => [
+    P('M4 7h16', { stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round' }),
+    P('M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2', { fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinejoin: 'round' }),
+    P('M6.5 7l1 12.2a1 1 0 0 0 1 .8h7a1 1 0 0 0 1-.8L18.5 7', { fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinejoin: 'round' }),
+    P('M10 11v5M14 11v5', { stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round' }),
+  ],
 };
 
 export type IconName = keyof typeof ICONS;
