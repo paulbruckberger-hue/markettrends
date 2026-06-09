@@ -40,23 +40,33 @@ async function gatherCandidates(term: SearchTermRow, lookbackDays?: number, appC
   const liLimit = appCfg?.linkedin_max_posts ?? 25;
   const gnLimit = appCfg?.google_news_max_results ?? 20;
 
+  // Distinct translated aliases (excludes any that equal the original term, e.g.
+  // unchanged company/brand names). Shared by every text source.
+  const original = term.query_display.trim().toLowerCase();
+  const aliases = (term.aliases ?? []).filter((a) => a?.q && a.q.trim().toLowerCase() !== original);
+
   if (cfg.google_news) {
     // Primary term in the user's geo edition (unchanged behaviour).
     try { out.push(...await fetchGoogleNews(term.query_display, geo, lookbackDays, gnLimit)); }
     catch (err) { logSourceError('google_news', term, err); }
 
     // Multilingual: each translated alias is searched in its own-language edition.
-    const original = term.query_display.trim().toLowerCase();
-    for (const al of term.aliases ?? []) {
-      if (!al?.q || al.q.trim().toLowerCase() === original) continue;
+    for (const al of aliases) {
       try { out.push(...await fetchGoogleNews(al.q, geo, lookbackDays, gnLimit, al.lang)); }
       catch (err) { logSourceError(`google_news[${al.lang}]`, term, err); }
     }
   }
 
   if (cfg.linkedin_posts && apifyEnabled()) {
+    // Primary term, then each translated alias (LinkedIn search is global — the
+    // query string itself carries the language).
     try { out.push(...await fetchLinkedInPosts(term.query_display, lookbackDays, liLimit)); }
     catch (err) { logSourceError('linkedin_posts', term, err); }
+
+    for (const al of aliases) {
+      try { out.push(...await fetchLinkedInPosts(al.q, lookbackDays, liLimit)); }
+      catch (err) { logSourceError(`linkedin_posts[${al.lang}]`, term, err); }
+    }
   }
 
   if (cfg.linkedin_company_page && isCompany && term.company_linkedin_id && apifyEnabled()) {
