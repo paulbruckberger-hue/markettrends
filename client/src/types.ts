@@ -22,7 +22,7 @@ export interface SourcesConfig {
   newsroom: boolean;
 }
 
-export type ScheduleInterval = null | 'manual' | '6h' | '12h' | '24h' | '48h' | '168h';
+export type ScheduleInterval = null | 'manual' | '1h' | '2h' | '3h' | '6h' | '12h' | '24h' | '48h' | '168h';
 
 export interface WatchItem {
   id: string;
@@ -114,16 +114,19 @@ export interface AppSettings {
 export interface Overview {
   total: number;
   watchCount: number;
+  period?: number;
   byRank: Record<string, number>;
   bySource: { source_type: SourceTypeName; n: number }[];
   bySentiment: Record<string, number>;
   volume: { date: string; n: number }[];
   read: number;
   bookmarked: number;
+  last_updated?: string | null;
 }
 
 export interface WatchAnalytics {
   watchItem: { id: string; display_name: string; type: WatchType };
+  period?: number;
   volume: { date: string; n: number }[];
   sentiment: Record<string, number>;
   topSources: { source: string; n: number }[];
@@ -134,6 +137,62 @@ export interface WatchAnalytics {
 
 export interface SourcesResponse {
   bySource: { source_type: SourceTypeName; n: number }[];
+}
+
+export interface TrendWatch {
+  watch_item_id: string;
+  name: string;
+  color: string | null;
+  type: WatchType;
+  total: number;
+  prev: number;
+  momentum: number;
+  today: number;
+  avg_daily: number;
+  spike: boolean;
+  spike_factor: number;
+  spark: number[];
+}
+
+export interface EmergingTag {
+  tag: string;
+  cur: number;
+  prev: number;
+  momentum: number;
+}
+
+export interface TrendsResponse {
+  period: number;
+  generated_at: string;
+  last_updated: string | null;
+  watches: TrendWatch[];
+  emergingTags: EmergingTag[];
+}
+
+export interface TodayWatch {
+  watch_item_id: string;
+  name: string;
+  color: string | null;
+  type: WatchType;
+  today: number;
+}
+
+export interface TodayResponse {
+  today: number;
+  yesterday: number;
+  rank1_today: number;
+  perWatch: TodayWatch[];
+  last_updated: string | null;
+}
+
+export interface Suggestion {
+  name: string;
+  count: number;
+}
+
+export interface SuggestionsResponse {
+  companies: Suggestion[];
+  topics: Suggestion[];
 }
 
 export interface CompetitorSov {
@@ -173,6 +232,7 @@ export interface CompetitorAnalysis {
   moves: CompetitorMove[];
   strengths: string[];
   watchouts: string[];
+  detectedRivals: { name: string; count: number }[];
   aiRivals: string[];
   ai_used: boolean;
 }

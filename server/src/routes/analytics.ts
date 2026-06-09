@@ -12,6 +12,29 @@ type Row = Record<string, unknown>;
 const rows = async (q: ReturnType<typeof sql>): Promise<Row[]> => (await db.execute(q)).rows as Row[];
 const num = (v: unknown): number => (typeof v === 'number' ? v : parseInt(String(v ?? 0), 10) || 0);
 
+/** Parse a ?period= value (e.g. "7", "30d", "90") into a day count, clamped. */
+function parsePeriodDays(v: unknown, fallback: number): number {
+  const allowed = [7, 14, 30, 90];
+  const n = parseInt(String(v ?? '').replace(/[^0-9]/g, ''), 10);
+  return allowed.includes(n) ? n : fallback;
+}
+
+/** Build a zero-filled daily series of length `days` ending today from a {date->count} map. */
+function fillSeries(byDate: Map<string, number>, days: number): number[] {
+  const out: number[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 86_400_000).toISOString().slice(0, 10);
+    out.push(byDate.get(d) ?? 0);
+  }
+  return out;
+}
+
+/** Percentage momentum of a window vs the immediately preceding equal window. */
+function momentumPct(recent: number, prior: number): number {
+  if (prior > 0) return Math.round(((recent - prior) / prior) * 100);
+  return recent > 0 ? 100 : 0;
+}
+
 /** Daily signal count for a search_term over the last `days` days, aligned to an array. */
 async function dailySpark(termId: string, days: number): Promise<number[]> {
   const r = await rows(sql`
@@ -33,8 +56,9 @@ async function dailySpark(termId: string, days: number): Promise<number[]> {
 // GET /api/analytics/overview
 analyticsRouter.get('/overview', async (req: AuthedRequest, res: Response) => {
   const uid = req.user!.id;
+  const days = parsePeriodDays(req.query.period, 14);
 
-  const [rankRows, sourceRows, sentimentRows, volumeRows, stateRows, watchRows] = await Promise.all([
+  const [rankRows, sourceRows, sentimentRows, volumeRows, stateRows, watchRows, freshRows] = await Promise.all([
     rows(sql`SELECT c.rank::int AS rank, count(*)::int AS n
              FROM watch_items wi JOIN classifications c ON c.search_term_id = wi.search_term_id
              WHERE wi.user_id = ${uid} AND wi.is_active = true GROUP BY c.rank`),
@@ -49,13 +73,16 @@ analyticsRouter.get('/overview', async (req: AuthedRequest, res: Response) => {
              FROM watch_items wi JOIN classifications c ON c.search_term_id = wi.search_term_id
              JOIN articles a ON a.id = c.article_id
              WHERE wi.user_id = ${uid} AND wi.is_active = true
-               AND COALESCE(a.published_at, a.created_at) >= now() - interval '14 days'
+               AND COALESCE(a.published_at, a.created_at) >= now() - (${days} || ' days')::interval
              GROUP BY 1 ORDER BY 1`),
     rows(sql`SELECT
                count(*) FILTER (WHERE uas.is_read)::int AS read,
                count(*) FILTER (WHERE uas.is_bookmarked)::int AS bookmarked
              FROM user_article_state uas WHERE uas.user_id = ${uid}`),
     rows(sql`SELECT count(*)::int AS n FROM watch_items WHERE user_id = ${uid} AND is_active = true`),
+    rows(sql`SELECT max(st.last_run_at) AS last_run
+             FROM watch_items wi JOIN search_terms st ON st.id = wi.search_term_id
+             WHERE wi.user_id = ${uid} AND wi.is_active = true`),
   ]);
 
   const byRank: Record<string, number> = { '1': 0, '2': 0, '3': 0 };
@@ -68,12 +95,14 @@ analyticsRouter.get('/overview', async (req: AuthedRequest, res: Response) => {
   res.json({
     total,
     watchCount: num(watchRows[0]?.n),
+    period: days,
     byRank,
     bySource: sourceRows.map((r) => ({ source_type: r.source_type, n: num(r.n) })),
     bySentiment,
     volume: volumeRows.map((r) => ({ date: r.d, n: num(r.n) })),
     read: num(stateRows[0]?.read),
     bookmarked: num(stateRows[0]?.bookmarked),
+    last_updated: freshRows[0]?.last_run ? new Date(freshRows[0].last_run as string).toISOString() : null,
   });
 });
 
@@ -93,11 +122,12 @@ analyticsRouter.get('/watchitem/:id', async (req: AuthedRequest, res: Response) 
     return;
   }
   const termId = wi.search_term_id;
+  const waDays = parsePeriodDays(req.query.period, 30);
 
   const [volume, sentiment, topSources, topAuthors, coTags, signalTypes] = await Promise.all([
     rows(sql`SELECT to_char(date_trunc('day', COALESCE(a.published_at,a.created_at)),'YYYY-MM-DD') AS d, count(*)::int AS n
              FROM classifications c JOIN articles a ON a.id = c.article_id
-             WHERE c.search_term_id = ${termId} AND COALESCE(a.published_at,a.created_at) >= now() - interval '30 days'
+             WHERE c.search_term_id = ${termId} AND COALESCE(a.published_at,a.created_at) >= now() - (${waDays} || ' days')::interval
              GROUP BY 1 ORDER BY 1`),
     rows(sql`SELECT COALESCE(c.sentiment::text,'neutral') AS sentiment, count(*)::int AS n
              FROM classifications c WHERE c.search_term_id = ${termId} GROUP BY c.sentiment`),
@@ -122,6 +152,7 @@ analyticsRouter.get('/watchitem/:id', async (req: AuthedRequest, res: Response) 
 
   res.json({
     watchItem: { id: wi.id, display_name: wi.display_name, type: wi.type },
+    period: waDays,
     volume: volume.map((r) => ({ date: r.d, n: num(r.n) })),
     sentiment: sentimentMap,
     topSources: topSources.map((r) => ({ source: r.source, n: num(r.n) })),
@@ -141,6 +172,214 @@ analyticsRouter.get('/sources', async (req: AuthedRequest, res: Response) => {
     WHERE wi.user_id = ${uid} AND wi.is_active = true GROUP BY a.source_type ORDER BY n DESC`);
 
   res.json({ bySource: bySource.map((r) => ({ source_type: r.source_type, n: num(r.n) })) });
+});
+
+// ---------- Trends: per-watch volume momentum + spike detection + emerging tags ----------
+// GET /api/analytics/trends?period=7|14|30|90&type=topic|company|all
+analyticsRouter.get('/trends', async (req: AuthedRequest, res: Response) => {
+  const uid = req.user!.id;
+  const days = parsePeriodDays(req.query.period, 30);
+  const typeFilter = req.query.type === 'topic' || req.query.type === 'company' ? req.query.type : null;
+
+  // One pass: per-watch daily counts across a double window (current + prior),
+  // assembled into series + momentum + spike in JS.
+  const [seriesRows, tagRows, freshRows] = await Promise.all([
+    rows(sql`
+      SELECT wi.id AS watch_item_id, wi.display_name AS name, wi.color AS color, st.type AS type,
+        to_char(date_trunc('day', COALESCE(a.published_at, a.created_at)),'YYYY-MM-DD') AS d,
+        count(*)::int AS n
+      FROM watch_items wi
+      JOIN search_terms st ON st.id = wi.search_term_id
+      JOIN classifications c ON c.search_term_id = wi.search_term_id
+      JOIN articles a ON a.id = c.article_id
+      WHERE wi.user_id = ${uid} AND wi.is_active = true
+        AND COALESCE(a.published_at, a.created_at) >= now() - (${days * 2} || ' days')::interval
+      GROUP BY wi.id, wi.display_name, wi.color, st.type, d`),
+    // Emerging tags: current window vs prior equal window across all watches.
+    rows(sql`
+      SELECT tag,
+        count(*) FILTER (WHERE recent)::int AS cur,
+        count(*) FILTER (WHERE NOT recent)::int AS prev
+      FROM (
+        SELECT lower(trim(jsonb_array_elements_text(c.tags))) AS tag,
+          (COALESCE(a.published_at, a.created_at) >= now() - (${days} || ' days')::interval) AS recent
+        FROM watch_items wi
+        JOIN classifications c ON c.search_term_id = wi.search_term_id
+        JOIN articles a ON a.id = c.article_id
+        WHERE wi.user_id = ${uid} AND wi.is_active = true AND c.tags IS NOT NULL
+          AND COALESCE(a.published_at, a.created_at) >= now() - (${days * 2} || ' days')::interval
+      ) t
+      WHERE tag <> ''
+      GROUP BY tag
+      ORDER BY cur DESC
+      LIMIT 14`),
+    rows(sql`SELECT max(st.last_run_at) AS last_run
+             FROM watch_items wi JOIN search_terms st ON st.id = wi.search_term_id
+             WHERE wi.user_id = ${uid} AND wi.is_active = true`),
+  ]);
+
+  // Group daily rows per watch.
+  interface Acc { name: string; color: string | null; type: string; byDate: Map<string, number> }
+  const byWatch = new Map<string, Acc>();
+  for (const r of seriesRows) {
+    const id = String(r.watch_item_id);
+    let acc = byWatch.get(id);
+    if (!acc) {
+      acc = { name: String(r.name), color: (r.color as string) ?? null, type: String(r.type), byDate: new Map() };
+      byWatch.set(id, acc);
+    }
+    acc.byDate.set(String(r.d), num(r.n));
+  }
+
+  const watches = [...byWatch.entries()]
+    .filter(([, a]) => !typeFilter || a.type === typeFilter)
+    .map(([id, a]) => {
+      const full = fillSeries(a.byDate, days * 2);     // 2× window
+      const series = full.slice(days);                  // current window
+      const prevSeries = full.slice(0, days);           // prior window
+      const total = series.reduce((s, x) => s + x, 0);
+      const prev = prevSeries.reduce((s, x) => s + x, 0);
+      const today = series[series.length - 1] ?? 0;
+      const avgDaily = total / days;
+      const spikeFactor = avgDaily > 0 ? Math.round((today / avgDaily) * 10) / 10 : (today > 0 ? 99 : 0);
+      const spike = today >= 2 && avgDaily > 0 && today >= 2 * avgDaily;
+      return {
+        watch_item_id: id,
+        name: a.name,
+        color: a.color,
+        type: a.type,
+        total,
+        prev,
+        momentum: momentumPct(total, prev),
+        today,
+        avg_daily: Math.round(avgDaily * 10) / 10,
+        spike,
+        spike_factor: spikeFactor,
+        spark: series,
+      };
+    })
+    .sort((x, y) => y.total - x.total);
+
+  const emergingTags = tagRows
+    .map((r) => ({ tag: String(r.tag), cur: num(r.cur), prev: num(r.prev), momentum: momentumPct(num(r.cur), num(r.prev)) }))
+    .filter((t) => t.cur > 0);
+
+  res.json({
+    period: days,
+    generated_at: new Date().toISOString(),
+    last_updated: freshRows[0]?.last_run ? new Date(freshRows[0].last_run as string).toISOString() : null,
+    watches,
+    emergingTags,
+  });
+});
+
+// ---------- Today: fresh-signal overview ("was ist neu") ----------
+// GET /api/analytics/today
+analyticsRouter.get('/today', async (req: AuthedRequest, res: Response) => {
+  const uid = req.user!.id;
+
+  const [totals, perWatch, freshRows] = await Promise.all([
+    rows(sql`
+      SELECT
+        count(*) FILTER (WHERE day = 0)::int AS today,
+        count(*) FILTER (WHERE day = 1)::int AS yesterday,
+        count(*) FILTER (WHERE day = 0 AND c.rank = 1)::int AS rank1_today
+      FROM (
+        SELECT c.id, c.rank,
+          floor(extract(epoch FROM (date_trunc('day', now()) - date_trunc('day', COALESCE(a.published_at, a.created_at)))) / 86400)::int AS day
+        FROM watch_items wi
+        JOIN classifications c ON c.search_term_id = wi.search_term_id
+        JOIN articles a ON a.id = c.article_id
+        WHERE wi.user_id = ${uid} AND wi.is_active = true
+          AND COALESCE(a.published_at, a.created_at) >= now() - interval '2 days'
+      ) c`),
+    rows(sql`
+      SELECT wi.id AS watch_item_id, wi.display_name AS name, wi.color AS color, st.type AS type,
+        count(*)::int AS today
+      FROM watch_items wi
+      JOIN search_terms st ON st.id = wi.search_term_id
+      JOIN classifications c ON c.search_term_id = wi.search_term_id
+      JOIN articles a ON a.id = c.article_id
+      WHERE wi.user_id = ${uid} AND wi.is_active = true
+        AND date_trunc('day', COALESCE(a.published_at, a.created_at)) = date_trunc('day', now())
+      GROUP BY wi.id, wi.display_name, wi.color, st.type
+      ORDER BY today DESC`),
+    rows(sql`SELECT max(st.last_run_at) AS last_run
+             FROM watch_items wi JOIN search_terms st ON st.id = wi.search_term_id
+             WHERE wi.user_id = ${uid} AND wi.is_active = true`),
+  ]);
+
+  res.json({
+    today: num(totals[0]?.today),
+    yesterday: num(totals[0]?.yesterday),
+    rank1_today: num(totals[0]?.rank1_today),
+    perWatch: perWatch.map((r) => ({
+      watch_item_id: String(r.watch_item_id), name: String(r.name),
+      color: (r.color as string) ?? null, type: String(r.type), today: num(r.today),
+    })),
+    last_updated: freshRows[0]?.last_run ? new Date(freshRows[0].last_run as string).toISOString() : null,
+  });
+});
+
+// ---------- Data-driven watch suggestions (from real mentions + tags) ----------
+// GET /api/analytics/suggestions
+analyticsRouter.get('/suggestions', async (req: AuthedRequest, res: Response) => {
+  const uid = req.user!.id;
+
+  // What the user already watches — exclude these from suggestions.
+  const watched = await db.select({
+    type: search_terms.type,
+    query_normalized: search_terms.query_normalized,
+    display_name: watch_items.display_name,
+  }).from(watch_items)
+    .innerJoin(search_terms, eq(search_terms.id, watch_items.search_term_id))
+    .where(eq(watch_items.user_id, uid));
+
+  const watchedKeys = new Set<string>();
+  for (const w of watched) {
+    watchedKeys.add(w.query_normalized.toLowerCase());
+    if (w.display_name) watchedKeys.add(w.display_name.toLowerCase());
+  }
+
+  const [entityRows, tagRows] = await Promise.all([
+    // Most-mentioned organisations across the user's classifications (real entities).
+    rows(sql`
+      SELECT mode() WITHIN GROUP (ORDER BY ent_raw) AS display, lower(ent_raw) AS k, count(*)::int AS n
+      FROM (
+        SELECT trim(jsonb_array_elements_text(c.entities)) AS ent_raw
+        FROM watch_items wi
+        JOIN classifications c ON c.search_term_id = wi.search_term_id
+        WHERE wi.user_id = ${uid} AND wi.is_active = true AND c.entities IS NOT NULL
+      ) t
+      WHERE ent_raw <> ''
+      GROUP BY lower(ent_raw)
+      ORDER BY n DESC
+      LIMIT 40`),
+    // Most-used tags → topic suggestions.
+    rows(sql`
+      SELECT mode() WITHIN GROUP (ORDER BY tag_raw) AS display, lower(tag_raw) AS k, count(*)::int AS n
+      FROM (
+        SELECT trim(jsonb_array_elements_text(c.tags)) AS tag_raw
+        FROM watch_items wi
+        JOIN classifications c ON c.search_term_id = wi.search_term_id
+        WHERE wi.user_id = ${uid} AND wi.is_active = true AND c.tags IS NOT NULL
+      ) t
+      WHERE tag_raw <> ''
+      GROUP BY lower(tag_raw)
+      ORDER BY n DESC
+      LIMIT 40`),
+  ]);
+
+  const companies = entityRows
+    .filter((r) => !watchedKeys.has(String(r.k)))
+    .map((r) => ({ name: String(r.display), count: num(r.n) }))
+    .slice(0, 6);
+  const topics = tagRows
+    .filter((r) => !watchedKeys.has(String(r.k)))
+    .map((r) => ({ name: String(r.display), count: num(r.n) }))
+    .slice(0, 6);
+
+  res.json({ companies, topics });
 });
 
 // ---------- Competitor analysis (hybrid: real aggregation + AI enrichment) ----------
@@ -227,7 +466,7 @@ analyticsRouter.get('/competitor/:watchItemId', async (req: AuthedRequest, res: 
   const geoLabel = { global: 'Global', dach: 'DACH', austria: 'Österreich' }[wi.geo_filter] ?? 'Global';
 
   // --- Real aggregation for the subject ---
-  const [signalRows, sentimentRows, moveRows, sovRows] = await Promise.all([
+  const [signalRows, sentimentRows, moveRows, sovRows, rivalRows] = await Promise.all([
     rows(sql`SELECT c.signal_type::text AS signal_type, count(*)::int AS n
              FROM classifications c WHERE c.search_term_id = ${termId} AND c.signal_type IS NOT NULL
              GROUP BY c.signal_type ORDER BY n DESC`),
@@ -252,6 +491,18 @@ analyticsRouter.get('/competitor/:watchItemId', async (req: AuthedRequest, res: 
       LEFT JOIN articles a ON a.id = c.article_id
       WHERE wi.user_id = ${uid} AND wi.is_active = true
       GROUP BY wi.id, wi.display_name, wi.color, wi.search_term_id`),
+    // Organisations co-mentioned in this subject's coverage (real entity extraction).
+    rows(sql`
+      SELECT mode() WITHIN GROUP (ORDER BY ent_raw) AS display, lower(ent_raw) AS k, count(*)::int AS n
+      FROM (
+        SELECT trim(jsonb_array_elements_text(c.entities)) AS ent_raw
+        FROM classifications c
+        WHERE c.search_term_id = ${termId} AND c.entities IS NOT NULL
+      ) t
+      WHERE ent_raw <> ''
+      GROUP BY lower(ent_raw)
+      ORDER BY n DESC
+      LIMIT 12`),
   ]);
 
   const sentiment = { positive: 0, neutral: 0, negative: 0 };
@@ -308,7 +559,18 @@ analyticsRouter.get('/competitor/:watchItemId', async (req: AuthedRequest, res: 
   }
 
   const trackedNames = new Set(sov.map((s) => s.name.toLowerCase()));
-  const aiRivals = (ai?.rivals ?? []).filter((n) => !trackedNames.has(n.toLowerCase()));
+  const subjectKey = wi.display_name.toLowerCase();
+  const domainKey = (wi.company_domain ?? '').toLowerCase();
+  // Real co-mentioned organisations — the data-backed rival list.
+  const detectedRivals = rivalRows
+    .map((r) => ({ name: String(r.display), count: num(r.n), k: String(r.k) }))
+    .filter((r) => r.k !== subjectKey && !trackedNames.has(r.k)
+      && !subjectKey.includes(r.k) && !r.k.includes(subjectKey)
+      && (!domainKey || !domainKey.includes(r.k)))
+    .slice(0, 6)
+    .map((r) => ({ name: r.name, count: r.count }));
+  const detectedKeys = new Set(detectedRivals.map((r) => r.name.toLowerCase()));
+  const aiRivals = (ai?.rivals ?? []).filter((n) => !trackedNames.has(n.toLowerCase()) && !detectedKeys.has(n.toLowerCase()));
 
   const totalSignals = signalRows.reduce((s, r) => s + num(r.n), 0);
   const fallbackSummary = `${wi.display_name}: ${totalSignals} klassifizierte Signale, ${subjectSov?.share ?? 0}% Share-of-Voice unter deinen beobachteten Unternehmen.`;
@@ -327,6 +589,7 @@ analyticsRouter.get('/competitor/:watchItemId', async (req: AuthedRequest, res: 
     moves,
     strengths: ai?.strengths ?? [],
     watchouts: ai?.watchouts ?? [],
+    detectedRivals,
     aiRivals,
     ai_used: !!ai,
   });

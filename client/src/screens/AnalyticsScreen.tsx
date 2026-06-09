@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { BarRow, BarsMini, Donut, FilterChip, Panel, Spinner, StatCard, TopBar } from '../components/ui';
 import { Icon } from '../components/Icon';
+import { CompareChart, LastUpdated, PeriodSwitch } from '../components/trends';
 import { RANK_META, SIGNAL_META } from '../lib/presenter';
 import { SOURCE_LABELS } from '../lib/labels';
 import { useOverview, useWatchAnalytics } from '../hooks/useAnalytics';
@@ -11,9 +12,10 @@ type Nav = (name: string, params?: Record<string, unknown>) => void;
 
 export default function AnalyticsScreen({ nav }: { nav: Nav }) {
   const [scope, setScope] = useState('all');
-  const { data: overview, isLoading } = useOverview();
+  const [period, setPeriod] = useState(30);
+  const { data: overview, isLoading } = useOverview(period);
   const { data: watches } = useWatchlist();
-  const { data: wa } = useWatchAnalytics(scope === 'all' ? null : scope);
+  const { data: wa } = useWatchAnalytics(scope === 'all' ? null : scope, period);
 
   const firstCompany = (watches ?? []).find((w) => w.type === 'company');
 
@@ -57,10 +59,11 @@ export default function AnalyticsScreen({ nav }: { nav: Nav }) {
   return (
     <>
       <TopBar>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 16px 12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 16px 8px' }}>
           <span style={{ fontWeight: 900, fontSize: 21, letterSpacing: -0.4 }}>Analyse</span>
-          <button className="iconbtn"><Icon name="calendar" size={20} /></button>
+          <PeriodSwitch value={period} onChange={setPeriod} />
         </div>
+        <div style={{ padding: '0 16px 10px' }}><LastUpdated iso={overview.last_updated} /></div>
       </TopBar>
 
       <div className="scroll" style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '12px 14px', borderBottom: '1px solid var(--border)' }}>
@@ -73,7 +76,7 @@ export default function AnalyticsScreen({ nav }: { nav: Nav }) {
       <div className="scroll" style={{ padding: 14, paddingBottom: 28, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           {isWatch ? <>
-            <StatCard icon="bolt" label="Signale (30 T.)" value={volSum} color="var(--accent)" />
+            <StatCard icon="bolt" label={`Signale (${period} T.)`} value={volSum} color="var(--accent)" />
             <StatCard icon="search" label="Quellen" value={sources.length} color="var(--pos)" />
             <StatCard icon="check" label="Positiv" value={sentiment.positive ?? 0} color="var(--pos)" />
             <StatCard icon="hash" label="Tags" value={wa?.coTags.length ?? 0} color="var(--accent)" />
@@ -85,7 +88,7 @@ export default function AnalyticsScreen({ nav }: { nav: Nav }) {
           </>}
         </div>
 
-        <Panel title="Signalvolumen" action={<span style={{ fontSize: 12.5, color: 'var(--text-3)' }}>{isWatch ? '30 Tage' : '14 Tage'}</span>}>
+        <Panel title="Signalvolumen" action={<span style={{ fontSize: 12.5, color: 'var(--text-3)' }}>{period} Tage</span>}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
             <span className="tabular" style={{ fontSize: 28, fontWeight: 800 }}>{volSum}</span>
             <span style={{ color: 'var(--text-3)', fontSize: 13 }}>Signale im Zeitraum</span>
@@ -93,6 +96,12 @@ export default function AnalyticsScreen({ nav }: { nav: Nav }) {
           {volData.length ? <BarsMini data={volData} h={96} color="var(--accent)" />
             : <div style={{ color: 'var(--text-3)', fontSize: 13, padding: '20px 0', textAlign: 'center' }}>Noch keine Daten</div>}
         </Panel>
+
+        {!isWatch && (
+          <Panel title="Beobachtungen im Vergleich" action={<span style={{ fontSize: 12.5, color: 'var(--text-3)' }}>{period} Tage</span>}>
+            <CompareChart period={period} />
+          </Panel>
+        )}
 
         {isWatch ? (
           <Panel title="Signal-Mix">

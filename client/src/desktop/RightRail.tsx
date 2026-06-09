@@ -1,10 +1,12 @@
-import { ReactNode } from 'react';
-import { Avatar, Delta } from '../components/ui';
+import { ReactNode, useState } from 'react';
+import { Avatar, Delta, Sparkline } from '../components/ui';
 import { Icon } from '../components/Icon';
+import { SpikeBadge } from '../components/trends';
 import { toDisplayItem } from '../lib/presenter';
 import { flattenFeed, useFeed } from '../hooks/useArticles';
-import { useWatchlist } from '../hooks/useWatchlist';
-import { useOverview } from '../hooks/useAnalytics';
+import { useCreateWatch, useWatchlist } from '../hooks/useWatchlist';
+import { useOverview, useSuggestions, useTrends } from '../hooks/useAnalytics';
+import { WatchType } from '../types';
 
 type Nav = (name: string, params?: Record<string, unknown>) => void;
 
@@ -36,42 +38,66 @@ function RailBox({ title, children, footer, onFooter }: { title?: string; childr
 }
 
 function TrendsBox({ nav }: { nav: Nav }) {
-  const feed = useFeed({ sort: 'top' });
-  const items = flattenFeed(feed.data).map(toDisplayItem);
-  const tagCount = new Map<string, number>();
-  for (const it of items) for (const t of it.tags) tagCount.set(t, (tagCount.get(t) ?? 0) + 1);
-  const trends = [...tagCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const { data } = useTrends(30);
+  const trends = (data?.watches ?? []).slice(0, 5);
   if (trends.length === 0) return null;
   return (
     <RailBox title="Trends für dich" footer="Mehr anzeigen" onFooter={() => nav('explore')}>
-      {trends.map(([tag, n], i) => (
-        <div key={tag} className="press" onClick={() => nav('explore')} style={{ padding: '9px 16px', cursor: 'pointer' }}
+      {trends.map((w, i) => (
+        <div key={w.watch_item_id} className="press"
+          onClick={() => nav(w.type === 'company' ? 'competitor' : 'watch', { id: w.watch_item_id })}
+          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 16px', cursor: 'pointer' }}
           onMouseEnter={(e) => e.currentTarget.style.background = 'var(--hover)'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-3)', fontSize: 12.5 }}>
-            <span>{i + 1} · Thema</span><span style={{ color: 'var(--pos)', display: 'inline-flex' }}><Icon name="trending" size={13} /></span>
+          <span style={{ width: 14, textAlign: 'center', color: 'var(--text-3)', fontSize: 12.5, fontWeight: 700 }}>{i + 1}</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontWeight: 800, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{w.name}</span>
+              {w.spike && <SpikeBadge factor={w.spike_factor} />}
+            </div>
+            <div style={{ color: 'var(--text-3)', fontSize: 12.5, marginTop: 1 }}>{w.total} Signale</div>
           </div>
-          <div style={{ fontWeight: 800, fontSize: 14.5, marginTop: 2 }}>#{tag}</div>
-          <div style={{ color: 'var(--text-3)', fontSize: 12.5, marginTop: 1 }}>{n} {n === 1 ? 'Signal' : 'Signale'}</div>
+          <Sparkline data={w.spark} w={48} h={22} color={w.momentum >= 0 ? 'var(--pos)' : 'var(--neg)'} />
+          <Delta v={w.momentum} />
         </div>
       ))}
     </RailBox>
   );
 }
 
-function SuggestBox({ onCompose }: { onCompose: () => void }) {
-  const SUGG = [
-    { n: 'Klarna', t: 'company', c: '#ffb3c7' }, { n: 'Stablecoins', t: 'topic', c: '#1d9bf0' }, { n: 'Revolut', t: 'company', c: '#7c5cff' },
-  ];
+function SuggestBox({ onCompose, flash }: { onCompose: () => void; flash?: (m: string) => void }) {
+  const { data } = useSuggestions();
+  const create = useCreateWatch();
+  const [added, setAdded] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState<string | null>(null);
+  const items = [
+    ...(data?.companies ?? []).map((c) => ({ ...c, type: 'company' as WatchType })),
+    ...(data?.topics ?? []).map((t) => ({ ...t, type: 'topic' as WatchType })),
+  ].slice(0, 4);
+  if (items.length === 0) return null;
+
+  const add = async (name: string, type: WatchType) => {
+    if (busy) return;
+    setBusy(name);
+    try {
+      await create.mutateAsync({ type, query: name });
+      setAdded((s) => new Set(s).add(name));
+      flash?.('Beobachtung angelegt');
+    } catch { flash?.('Anlegen fehlgeschlagen'); } finally { setBusy(null); }
+  };
+
   return (
-    <RailBox title="Empfohlen zu beobachten" footer="Mehr anzeigen" onFooter={onCompose}>
-      {SUGG.map((s) => (
-        <div key={s.n} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '10px 16px' }}>
-          <div style={{ width: 40, height: 40, borderRadius: '50%', background: s.c, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, flexShrink: 0 }}>{s.t === 'topic' ? '#' : s.n[0]}</div>
+    <RailBox title="Empfohlen zu beobachten" footer="Eigene anlegen" onFooter={onCompose}>
+      {items.map((s) => (
+        <div key={s.type + s.name} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '10px 16px' }}>
+          <div style={{ width: 40, height: 40, borderRadius: '50%', background: s.type === 'topic' ? 'var(--accent)' : '#7c5cff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, flexShrink: 0 }}>{s.type === 'topic' ? '#' : s.name[0]?.toUpperCase()}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 800, fontSize: 14.5 }}>{s.n}</div>
-            <div style={{ color: 'var(--text-3)', fontSize: 12.5 }}>{s.t === 'topic' ? 'Thema' : 'Unternehmen'}</div>
+            <div style={{ fontWeight: 800, fontSize: 14.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.name}</div>
+            <div style={{ color: 'var(--text-3)', fontSize: 12.5 }}>{s.type === 'topic' ? 'Thema' : 'Unternehmen'}</div>
           </div>
-          <button className="pill pill-solid press" onClick={onCompose} style={{ padding: '7px 15px', fontSize: 13 }}>Beobachten</button>
+          <button className="pill pill-solid press" disabled={busy === s.name || added.has(s.name)} onClick={() => add(s.name, s.type)}
+            style={{ padding: '7px 15px', fontSize: 13, opacity: added.has(s.name) ? 0.6 : 1 }}>
+            {added.has(s.name) ? '✓' : busy === s.name ? '…' : 'Beobachten'}
+          </button>
         </div>
       ))}
     </RailBox>

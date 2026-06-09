@@ -7,6 +7,9 @@ import {
 import { Icon } from '../components/Icon';
 import { Chevron } from '../components/ui';
 import {
+  CompareChart, EmergingTags, LastUpdated, PeriodSwitch, SectionHead, SuggestionsSection, TodayBanner, TrendList,
+} from '../components/trends';
+import {
   DisplayItem, GEO_META, RANK_META, SIGNAL_META, SRC_KIND_LABEL, toDisplayItem,
 } from '../lib/presenter';
 import { SOURCE_LABELS } from '../lib/labels';
@@ -77,19 +80,11 @@ export function DeskFeed({ actions, variant, setVariant, nav }: {
 }
 
 // ════════════════════════════════════════ EXPLORE ════════════════════════════════════════
-export function DeskExplore({ actions, nav, onCompose }: { actions: ItemActions; nav: Nav; onCompose: () => void }) {
+export function DeskExplore({ actions, nav, onCompose, flash }: { actions: ItemActions; nav: Nav; onCompose: () => void; flash: (m: string) => void }) {
   const [q, setQ] = useState('');
+  const [period, setPeriod] = useState(30);
   const feed = useFeed(q ? { search: q, sort: 'latest' } : { sort: 'top' });
   const items = flattenFeed(feed.data).map(toDisplayItem);
-
-  const tagCount = new Map<string, number>();
-  for (const it of items) for (const t of it.tags) tagCount.set(t, (tagCount.get(t) ?? 0) + 1);
-  const trends = [...tagCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
-
-  const SUGGESTED = [
-    { n: 'Klarna', t: 'company', c: '#ffb3c7' }, { n: 'Stablecoins', t: 'topic', c: '#1d9bf0' },
-    { n: 'Revolut', t: 'company', c: '#7c5cff' }, { n: 'PSD3', t: 'topic', c: '#f59e0b' },
-  ];
 
   return (
     <>
@@ -111,32 +106,25 @@ export function DeskExplore({ actions, nav, onCompose }: { actions: ItemActions;
             : <Empty icon="search" title="Keine Treffer" body={`Für „${q}" wurden keine Signale gefunden.`} />
         ) : !feed.isLoading && (
           <>
-            <div style={{ padding: '18px 18px 8px', fontWeight: 900, fontSize: 20, letterSpacing: -0.4 }}>Trends für dich</div>
-            {trends.length === 0 && <div style={{ padding: '0 18px 8px', color: 'var(--text-3)', fontSize: 13.5 }}>Noch keine Trends — rufe deine Beobachtungen ab.</div>}
-            {trends.map(([tag, n], i) => (
-              <div key={tag} className="press" onClick={() => setQ(tag)} style={{ padding: '12px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, borderBottom: '1px solid var(--border)' }}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--hover)'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-3)', fontSize: 13 }}>
-                    <span>{i + 1} · Thema</span><span style={{ color: 'var(--pos)', display: 'inline-flex' }}><Icon name="trending" size={13} /></span>
-                  </div>
-                  <div style={{ fontWeight: 800, fontSize: 16, marginTop: 2 }}>#{tag}</div>
-                  <div style={{ color: 'var(--text-3)', fontSize: 13, marginTop: 1 }}>{n} {n === 1 ? 'Signal' : 'Signale'}</div>
-                </div>
-                <button className="iconbtn"><Icon name="chevron" size={17} style={{ color: 'var(--text-3)' }} /></button>
-              </div>
-            ))}
-            <div style={{ padding: '20px 18px 12px', fontWeight: 900, fontSize: 20, letterSpacing: -0.4 }}>Empfohlen zu beobachten</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: '0 18px 24px' }}>
-              {SUGGESTED.map((s) => (
-                <div key={s.n} style={{ padding: 16, borderRadius: 16, border: '1px solid var(--border)', background: 'var(--raise)' }}>
-                  <div style={{ width: 42, height: 42, borderRadius: '50%', background: s.c, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, marginBottom: 11 }}>{s.t === 'topic' ? '#' : s.n[0]}</div>
-                  <div style={{ fontWeight: 800, fontSize: 15 }}>{s.n}</div>
-                  <div style={{ color: 'var(--text-3)', fontSize: 13, marginBottom: 12 }}>{s.t === 'topic' ? 'Thema' : 'Unternehmen'}</div>
-                  <button className="pill pill-solid press" onClick={onCompose} style={{ width: '100%', padding: '8px 0', fontSize: 13.5 }}>Beobachten</button>
-                </div>
-              ))}
+            <TodayBanner nav={nav} />
+            <SectionHead title="Trends für dich" right={<PeriodSwitch value={period} onChange={setPeriod} />} />
+            <div style={{ padding: '0 18px 6px', color: 'var(--text-3)', fontSize: 13 }}>
+              Worüber wird mehr oder weniger gesprochen — Momentum ggü. Vorperiode.
             </div>
+            <TrendList period={period} nav={nav} limit={10} />
+            <SectionHead title="Aufkommende Schlagworte" />
+            <EmergingTags period={period} onPick={setQ} />
+            <div style={{ padding: '16px 18px 4px', fontWeight: 900, fontSize: 20, letterSpacing: -0.4 }}>Themen im Vergleich</div>
+            <div style={{ margin: '0 18px', padding: 16, borderRadius: 'var(--r-card)', background: 'var(--raise)', border: '1px solid var(--border)' }}>
+              <CompareChart period={period} />
+            </div>
+            <SuggestionsSection flash={flash} />
+            <div style={{ padding: '4px 18px 0' }}>
+              <button className="pill pill-ghost press" onClick={onCompose} style={{ width: '100%', padding: '11px 0', fontSize: 14 }}>
+                + Eigene Beobachtung anlegen
+              </button>
+            </div>
+            <div style={{ height: 24 }} />
           </>
         )}
       </div>
@@ -244,9 +232,10 @@ export function DeskWatchlist({ nav, onCompose, flash }: { nav: Nav; onCompose: 
 // ════════════════════════════════════════ ANALYTICS ════════════════════════════════════════
 export function DeskAnalytics({ nav }: { nav: Nav }) {
   const [scope, setScope] = useState('all');
-  const { data: overview, isLoading } = useOverview();
+  const [period, setPeriod] = useState(30);
+  const { data: overview, isLoading } = useOverview(period);
   const { data: watches } = useWatchlist();
-  const { data: wa } = useWatchAnalytics(scope === 'all' ? null : scope);
+  const { data: wa } = useWatchAnalytics(scope === 'all' ? null : scope, period);
   const firstCompany = (watches ?? []).find((w) => w.type === 'company');
 
   if (isLoading || !overview) {
@@ -276,19 +265,20 @@ export function DeskAnalytics({ nav }: { nav: Nav }) {
 
   return (
     <>
-      <DeskHeader title="Analyse" right={<button className="iconbtn"><Icon name="calendar" size={20} /></button>}
-        sub={
-          <div className="scroll" style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '12px 18px' }}>
+      <DeskHeader title="Analyse" right={<PeriodSwitch value={period} onChange={setPeriod} />}
+        sub={<>
+          <div style={{ padding: '2px 18px 10px' }}><LastUpdated iso={overview.last_updated} /></div>
+          <div className="scroll" style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '0 18px 12px' }}>
             <FilterChip active={scope === 'all'} onClick={() => setScope('all')} label="Alle Beobachtungen" />
             {(watches ?? []).filter((w) => w.is_active).map((w) => (
               <FilterChip key={w.id} active={scope === w.id} onClick={() => setScope(w.id)} label={w.display_name} dot={w.color || '#1d9bf0'} />
             ))}
           </div>
-        } />
+        </>} />
       <div className="dt-scroll scroll" style={{ flex: 1, padding: 18 }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
           {isWatch ? <>
-            <StatCard icon="bolt" label="Signale (30 T.)" value={volSum} color="var(--accent)" />
+            <StatCard icon="bolt" label={`Signale (${period} T.)`} value={volSum} color="var(--accent)" />
             <StatCard icon="search" label="Quellen" value={sources.length} color="var(--pos)" />
             <StatCard icon="check" label="Positiv" value={sentiment.positive ?? 0} color="var(--pos)" />
             <StatCard icon="hash" label="Tags" value={wa?.coTags.length ?? 0} color="var(--accent)" />
@@ -301,7 +291,7 @@ export function DeskAnalytics({ nav }: { nav: Nav }) {
         </div>
 
         <div style={{ marginBottom: 12 }}>
-          <Panel title="Signalvolumen" action={<span style={{ fontSize: 12.5, color: 'var(--text-3)' }}>{isWatch ? '30 Tage' : '14 Tage'}</span>}>
+          <Panel title="Signalvolumen" action={<span style={{ fontSize: 12.5, color: 'var(--text-3)' }}>{period} Tage</span>}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 14 }}>
               <span className="tabular" style={{ fontSize: 30, fontWeight: 800 }}>{volSum}</span>
               <span style={{ color: 'var(--text-3)', fontSize: 13 }}>Signale im Zeitraum</span>
@@ -310,6 +300,14 @@ export function DeskAnalytics({ nav }: { nav: Nav }) {
               : <div style={{ color: 'var(--text-3)', fontSize: 13, padding: '20px 0', textAlign: 'center' }}>Noch keine Daten</div>}
           </Panel>
         </div>
+
+        {!isWatch && (
+          <div style={{ marginBottom: 12 }}>
+            <Panel title="Beobachtungen im Vergleich" action={<span style={{ fontSize: 12.5, color: 'var(--text-3)' }}>{period} Tage</span>}>
+              <CompareChart period={period} />
+            </Panel>
+          </div>
+        )}
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
           {isWatch ? (
@@ -649,9 +647,21 @@ export function DeskCompetitor({ id, actions, nav, back, onCompose }: {
                   </div>
                 </div>
               ))}
+              {d.detectedRivals.map((r, i) => (
+                <div key={'det-' + r.name} style={{ padding: 16, borderRadius: 'var(--r-card)', background: 'var(--raise)', border: '1px solid color-mix(in srgb, var(--accent) 28%, var(--border))', display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 42, height: 42, borderRadius: '50%', background: PALETTE[(i + d.sov.length) % PALETTE.length], color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, flexShrink: 0 }}>{r.name[0]}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 800, fontSize: 15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</div>
+                    <div style={{ color: 'var(--text-3)', fontSize: 12.5 }}>{r.count}× miterwähnt</div>
+                  </div>
+                  <button className="press" onClick={onCompose} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '8px 12px', borderRadius: 999, border: '1px solid var(--border-strong)', background: 'transparent', color: 'var(--accent)', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                    <Icon name="plus" size={14} /> Beobachten
+                  </button>
+                </div>
+              ))}
               {d.aiRivals.map((name, i) => (
                 <div key={name} style={{ padding: 16, borderRadius: 'var(--r-card)', background: 'var(--raise)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ width: 42, height: 42, borderRadius: '50%', background: PALETTE[(i + d.sov.length) % PALETTE.length], color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, flexShrink: 0 }}>{name[0]}</div>
+                  <div style={{ width: 42, height: 42, borderRadius: '50%', background: PALETTE[(i + d.sov.length + d.detectedRivals.length) % PALETTE.length], color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, flexShrink: 0 }}>{name[0]}</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 800, fontSize: 15 }}>{name}</div>
                     <div style={{ color: 'var(--text-3)', fontSize: 12.5 }}>KI-erkannt</div>

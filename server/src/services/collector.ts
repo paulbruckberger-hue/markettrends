@@ -187,6 +187,7 @@ export async function collectForSearchTerm(
         rank_reason: result.rank_reason,
         sentiment: result.sentiment,
         tags: result.tags,
+        entities: result.entities ?? [],
         signal_type: watchType === 'company' ? (result.signal_type ?? 'general') : null,
         ai_model_used: pctx.variant ?? pctx.model,
         rank_prompt_version: RANK_PROMPT_VERSION,
@@ -248,7 +249,7 @@ export async function collectForSearchTerm(
 }
 
 const SCHEDULE_INTERVAL_HOURS: Record<string, number> = {
-  '1h': 1, '6h': 6, '12h': 12, '24h': 24, '48h': 48, '168h': 168,
+  '1h': 1, '2h': 2, '3h': 3, '6h': 6, '12h': 12, '24h': 24, '48h': 48, '168h': 168,
 };
 
 /** Check if a search_term is due for a scheduled run based on its subscribers' schedule_interval. */

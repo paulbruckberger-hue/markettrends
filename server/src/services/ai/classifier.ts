@@ -54,23 +54,26 @@ export interface ClassificationResult {
   summary: string;          // "• …\n• …\n• …"
   sentiment: 'positive' | 'negative' | 'neutral';
   tags: string[];           // max 3
+  entities: string[];       // named organisations/companies mentioned (max 6)
   signal_type?: SignalType; // nur bei watchType='company'
 }
 
 // ---------- Prompts ----------
 
-function langInstruction(lang = 'de'): { base: string; headline: string; reason: string; tag: string } {
+function langInstruction(lang = 'de'): { base: string; headline: string; reason: string; tag: string; entity: string } {
   if (lang === 'en') return {
     base: 'You are a Strategic Intelligence Analyst for a senior executive. You judge how relevant a piece of content is for an observed term — strictly, from a decision-maker\'s perspective — and summarise it for action. Answer EXCLUSIVELY in English.',
     headline: 'concise Executive Headline in English',
     reason: 'short justification (1 sentence, English) — state WHY this rank, referencing the observed term',
     tag: 'max three keywords in English',
+    entity: 'up to 6 named companies/organisations mentioned in the content (proper names only, official spelling, no generic terms)',
   };
   return {
     base: 'Du bist ein strategischer Intelligence-Analyst für eine Führungskraft. Du bewertest streng aus Entscheider-Sicht, wie relevant ein Inhalt für einen Beobachtungsbegriff ist, und fasst ihn handlungsorientiert zusammen. Antworte AUSSCHLIESSLICH auf Deutsch.',
     headline: 'prägnante Executive-Headline auf Deutsch',
     reason: 'kurze Begründung (1 Satz, Deutsch) — nenne, WARUM dieser Rang, mit Bezug zum Beobachtungsbegriff',
     tag: 'max drei Schlagworte auf Deutsch',
+    entity: 'bis zu 6 im Inhalt genannte Unternehmen/Organisationen (nur Eigennamen, offizielle Schreibweise, keine generischen Begriffe)',
   };
 }
 
@@ -177,7 +180,8 @@ ${lang === 'en' ? 'Return JSON in exactly this form' : 'Gib JSON in genau dieser
   "title": "${l.headline}",
   "summary": "• first point\\n• second point\\n• third point",
   "sentiment": "positive | negative | neutral",
-  "tags": ["${l.tag}"]
+  "tags": ["${l.tag}"],
+  "entities": ["${l.entity}"]
 }`;
 };
 
@@ -212,6 +216,7 @@ ${lang === 'en' ? 'Return JSON in exactly this form' : 'Gib JSON in genau dieser
   "summary": "• first point\\n• second point\\n• third point",
   "sentiment": "positive | negative | neutral",
   "tags": ["${l.tag}"],
+  "entities": ["${l.entity}"],
   "signal_type": "partnership"
 }`;
 };
@@ -337,6 +342,23 @@ function coerceTags(v: unknown): string[] {
   return v.filter((x): x is string => typeof x === 'string').map((s) => s.trim()).filter(Boolean).slice(0, 3);
 }
 
+function coerceEntities(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const x of v) {
+    if (typeof x !== 'string') continue;
+    const s = x.trim().replace(/\s+/g, ' ');
+    if (!s || s.length > 60) continue;
+    const key = s.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+    if (out.length >= 6) break;
+  }
+  return out;
+}
+
 function coerceSignal(v: unknown): SignalType | undefined {
   return SIGNAL_TYPES.includes(v as SignalType) ? (v as SignalType) : undefined;
 }
@@ -350,6 +372,7 @@ export function parseClassificationJson(raw: string, input: ClassificationInput)
     summary: '• Inhalt konnte nicht automatisch zusammengefasst werden.',
     sentiment: 'neutral',
     tags: [],
+    entities: [],
     ...(input.watchType === 'company' ? { signal_type: 'general' as SignalType } : {}),
   };
 
@@ -371,6 +394,7 @@ export function parseClassificationJson(raw: string, input: ClassificationInput)
       summary: typeof obj.summary === 'string' && obj.summary.trim() ? obj.summary.trim() : fallback.summary,
       sentiment: coerceSentiment(obj.sentiment),
       tags: coerceTags(obj.tags),
+      entities: coerceEntities(obj.entities),
     };
     if (input.watchType === 'company') {
       result.signal_type = coerceSignal(obj.signal_type) ?? 'general';

@@ -187,7 +187,7 @@ watchlistRouter.post('/:id/run', async (req: AuthedRequest, res: Response) => {
 
 // PUT /api/watchlist/:id/schedule  → set schedule_interval per watch-item
 watchlistRouter.put('/:id/schedule', async (req: AuthedRequest, res: Response) => {
-  const VALID = [null, 'manual', '6h', '12h', '24h', '48h', '168h'];
+  const VALID = [null, 'manual', '1h', '2h', '3h', '6h', '12h', '24h', '48h', '168h'];
   const interval: string | null = req.body?.schedule_interval ?? null;
   if (!VALID.includes(interval)) {
     res.status(400).json({ error: `Ungültiges Intervall. Erlaubt: ${VALID.filter(Boolean).join(', ')} oder null` });

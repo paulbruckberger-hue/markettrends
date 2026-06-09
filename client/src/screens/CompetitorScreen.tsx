@@ -174,6 +174,26 @@ export default function CompetitorScreen({ id, actions, nav, back, onCompose }: 
             </div>
           ))}
 
+          {d.detectedRivals.length > 0 && (
+            <div style={{ marginTop: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, fontSize: 14, color: 'var(--text-2)', margin: '4px 2px 8px' }}>
+                <Icon name="bolt" size={14} style={{ color: 'var(--accent)' }} /> Häufig miterwähnt (aus echten Daten)
+              </div>
+              {d.detectedRivals.map((r, i) => (
+                <div key={r.name} style={{ padding: 14, borderRadius: 'var(--r-card)', background: 'var(--raise)', border: '1px solid var(--border)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: '50%', background: PALETTE[(i + d.sov.length) % PALETTE.length], color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, flexShrink: 0 }}>{r.name[0]}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</div>
+                    <div style={{ color: 'var(--text-3)', fontSize: 12.5 }}>{r.count}× miterwähnt</div>
+                  </div>
+                  <button className="press" onClick={onCompose} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: 999, border: '1px solid var(--border-strong)', background: 'transparent', color: 'var(--accent)', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                    <Icon name="plus" size={15} /> Beobachten
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
           {d.aiRivals.length > 0 && (
             <div style={{ marginTop: 4 }}>
               <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--text-2)', margin: '4px 2px 8px' }}>Von der KI erkannte Wettbewerber</div>

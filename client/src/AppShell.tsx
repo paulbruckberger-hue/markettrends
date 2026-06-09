@@ -71,7 +71,7 @@ export default function AppShell() {
       case 'feed':
         return <FeedScreen actions={actions} variant={cardVariant} setVariant={setVariant} onOpen={openDetail} nav={nav} username={me?.username ?? ''} />;
       case 'explore':
-        return <ExploreScreen actions={actions} onOpen={openDetail} onCompose={() => setCompose(true)} />;
+        return <ExploreScreen actions={actions} onOpen={openDetail} onCompose={() => setCompose(true)} nav={nav} flash={flash} />;
       case 'watchlist':
         return <WatchlistScreen nav={nav} onCompose={() => setCompose(true)} flash={flash} />;
       case 'analytics':

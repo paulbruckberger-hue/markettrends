@@ -120,6 +120,9 @@ export const classifications = pgTable('classifications', {
   rank_reason: text('rank_reason'),
   sentiment: sentimentEnum('sentiment'),
   tags: jsonb('tags').$type<string[]>().default([]),
+  // Named organisations/companies mentioned in the content (max ~6). Powers
+  // automatic competitor detection + data-driven watch suggestions.
+  entities: jsonb('entities').$type<string[]>().default([]),
   signal_type: signalTypeEnum('signal_type'),   // nur bei type='company' gesetzt
 
   ai_model_used: text('ai_model_used'),

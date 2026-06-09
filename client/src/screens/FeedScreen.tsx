@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import {
   BrandMark, BrandWord, Empty, FeedCard, FilterChip, ItemActions,
   Spinner, Tabs, TopBar, UserCircle,
@@ -15,6 +15,30 @@ const VIEWS = [
   { k: 'kompakt', label: 'Kompakt' },
   { k: 'karte', label: 'Karte' },
 ];
+
+function dayKey(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
+}
+function dayLabel(iso: string | null | undefined): string {
+  const key = dayKey(iso);
+  if (!key) return '';
+  const today = new Date().toISOString().slice(0, 10);
+  const yest = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  if (key === today) return 'Heute';
+  if (key === yest) return 'Gestern';
+  return new Date(iso as string).toLocaleDateString('de-AT', { weekday: 'short', day: '2-digit', month: 'short' });
+}
+function DaySep({ label }: { label: string }) {
+  return (
+    <div style={{
+      position: 'sticky', top: 0, zIndex: 5, padding: '7px 16px', background: 'var(--bar-blur)',
+      backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderBottom: '1px solid var(--border)',
+      fontSize: 12.5, fontWeight: 800, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: 0.4,
+    }}>{label}</div>
+  );
+}
 
 export default function FeedScreen({ actions, variant, setVariant, onOpen, nav, username }: {
   actions: ItemActions;
@@ -96,9 +120,20 @@ export default function FeedScreen({ actions, variant, setVariant, onOpen, nav, 
             : 'Lege eine Beobachtung an oder rufe sie ab, damit dein Feed sich füllt.'} />
       )}
 
-      {items.map((it) => (
-        <FeedCard key={it.id} item={it} variant={variant} on={actions} onOpen={onOpen} />
-      ))}
+      {(() => {
+        let lastKey = '';
+        return items.map((it) => {
+          const card = <FeedCard key={it.id} item={it} variant={variant} on={actions} onOpen={onOpen} />;
+          if (tab !== 'latest') return card;
+          const ts = it.raw.published_at || it.raw.classified_at;
+          const key = dayKey(ts);
+          if (key && key !== lastKey) {
+            lastKey = key;
+            return <Fragment key={'g-' + it.id}><DaySep label={dayLabel(ts)} />{card}</Fragment>;
+          }
+          return card;
+        });
+      })()}
 
       {feed.hasNextPage && (
         <div style={{ display: 'flex', justifyContent: 'center', padding: '16px' }}>

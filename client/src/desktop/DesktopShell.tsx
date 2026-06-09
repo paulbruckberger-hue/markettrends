@@ -139,7 +139,7 @@ export default function DesktopShell() {
   const center = (() => {
     switch (current.name) {
       case 'feed': return <DeskFeed actions={actions} variant={cardVariant} setVariant={setVariant} nav={nav} />;
-      case 'explore': return <DeskExplore actions={actions} nav={nav} onCompose={() => setCompose(true)} />;
+      case 'explore': return <DeskExplore actions={actions} nav={nav} onCompose={() => setCompose(true)} flash={flash} />;
       case 'watchlist': return <DeskWatchlist nav={nav} onCompose={() => setCompose(true)} flash={flash} />;
       case 'analytics': return <DeskAnalytics nav={nav} />;
       case 'detail': return <DeskDetail item={current.params.item as DisplayItem} actions={actions} nav={nav} back={back} />;
