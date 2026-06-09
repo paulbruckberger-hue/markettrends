@@ -7,6 +7,7 @@ const OPTIONS: { days?: number; label: string; sub: string }[] = [
   { days: 30, label: 'Letzte 30 Tage', sub: 'Rückwirkend suchen' },
   { days: 90, label: 'Letzte 90 Tage', sub: 'Rückwirkend suchen' },
   { days: 120, label: 'Letzte 120 Tage', sub: 'Rückwirkend suchen' },
+  { days: 180, label: 'Letzte 6 Monate', sub: '180 Tage rückwirkend' },
 ];
 
 /**
