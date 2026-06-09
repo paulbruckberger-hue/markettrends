@@ -40,33 +40,42 @@ async function gatherCandidates(term: SearchTermRow, lookbackDays?: number, appC
   const liLimit = appCfg?.linkedin_max_posts ?? 25;
   const gnLimit = appCfg?.google_news_max_results ?? 20;
 
-  // Distinct translated aliases (excludes any that equal the original term, e.g.
-  // unchanged company/brand names). Shared by every text source.
-  const original = term.query_display.trim().toLowerCase();
-  const aliases = (term.aliases ?? []).filter((a) => a?.q && a.q.trim().toLowerCase() !== original);
+  // All translated aliases. Each is searched in its OWN language edition, so a
+  // keyword whose translation is spelled identically (e.g. "Leasing", or a German
+  // term under geo=global) still gets its language edition queried.
+  const allAliases = (term.aliases ?? []).filter((a) => a?.q && a.q.trim());
 
   if (cfg.google_news) {
-    // Primary term in the user's geo edition (unchanged behaviour).
-    try { out.push(...await fetchGoogleNews(term.query_display, geo, lookbackDays, gnLimit)); }
-    catch (err) { logSourceError('google_news', term, err); }
-
-    // Multilingual: each translated alias is searched in its own-language edition.
-    for (const al of aliases) {
-      try { out.push(...await fetchGoogleNews(al.q, geo, lookbackDays, gnLimit, al.lang)); }
-      catch (err) { logSourceError(`google_news[${al.lang}]`, term, err); }
-    }
+    // Dedup by (language edition + query) — the original in the geo edition and a
+    // same-spelled alias in another edition are NOT duplicates and both run.
+    const geoEditionKey = (g: GeoFilter): string => (g === 'dach' ? 'DE' : g === 'austria' ? 'AT' : 'US');
+    const langEditionKey: Record<string, string> = { de: 'DE', en: 'US', fr: 'FR', es: 'ES', it: 'IT' };
+    const issued = new Set<string>();
+    const gn = async (q: string, lang?: string): Promise<void> => {
+      const edition = lang ? (langEditionKey[lang] ?? 'US') : geoEditionKey(geo);
+      const key = `${edition}|${q.trim().toLowerCase()}`;
+      if (issued.has(key)) return;
+      issued.add(key);
+      try { out.push(...await fetchGoogleNews(q, geo, lookbackDays, gnLimit, lang)); }
+      catch (err) { logSourceError(`google_news${lang ? `[${lang}]` : ''}`, term, err); }
+    };
+    await gn(term.query_display);                          // primary in geo edition
+    for (const al of allAliases) await gn(al.q, al.lang);  // each alias in its own edition
   }
 
   if (cfg.linkedin_posts && apifyEnabled()) {
-    // Primary term, then each translated alias (LinkedIn search is global — the
-    // query string itself carries the language).
-    try { out.push(...await fetchLinkedInPosts(term.query_display, lookbackDays, liLimit)); }
-    catch (err) { logSourceError('linkedin_posts', term, err); }
-
-    for (const al of aliases) {
-      try { out.push(...await fetchLinkedInPosts(al.q, lookbackDays, liLimit)); }
-      catch (err) { logSourceError(`linkedin_posts[${al.lang}]`, term, err); }
-    }
+    // LinkedIn search is global (no language edition) → dedup by query only, so
+    // identically-spelled translations don't trigger redundant Apify calls.
+    const issued = new Set<string>();
+    const li = async (q: string, lang?: string): Promise<void> => {
+      const key = q.trim().toLowerCase();
+      if (issued.has(key)) return;
+      issued.add(key);
+      try { out.push(...await fetchLinkedInPosts(q, lookbackDays, liLimit)); }
+      catch (err) { logSourceError(`linkedin_posts${lang ? `[${lang}]` : ''}`, term, err); }
+    };
+    await li(term.query_display);
+    for (const al of allAliases) await li(al.q, al.lang);
   }
 
   if (cfg.linkedin_company_page && isCompany && term.company_linkedin_id && apifyEnabled()) {
