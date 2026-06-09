@@ -4,6 +4,7 @@ import { articles, classifications, job_runs, search_terms, watch_items } from '
 import { contentHash } from '../lib/hash';
 import { matchesQuery } from '../lib/matchesQuery';
 import { classify, ClassificationInput, RANK_PROMPT_VERSION } from './ai/classifier';
+import { generateAliases } from './aliases';
 import { getActiveAiConfig, loadGlobalFewShot, makePersonalizeContext, personalizeClassification } from './personalize';
 import { fetchGoogleNews } from './sources/googleNews';
 import { fetchLinkedInPosts } from './sources/apifyLinkedIn';
@@ -40,8 +41,17 @@ async function gatherCandidates(term: SearchTermRow, lookbackDays?: number, appC
   const gnLimit = appCfg?.google_news_max_results ?? 20;
 
   if (cfg.google_news) {
+    // Primary term in the user's geo edition (unchanged behaviour).
     try { out.push(...await fetchGoogleNews(term.query_display, geo, lookbackDays, gnLimit)); }
     catch (err) { logSourceError('google_news', term, err); }
+
+    // Multilingual: each translated alias is searched in its own-language edition.
+    const original = term.query_display.trim().toLowerCase();
+    for (const al of term.aliases ?? []) {
+      if (!al?.q || al.q.trim().toLowerCase() === original) continue;
+      try { out.push(...await fetchGoogleNews(al.q, geo, lookbackDays, gnLimit, al.lang)); }
+      catch (err) { logSourceError(`google_news[${al.lang}]`, term, err); }
+    }
   }
 
   if (cfg.linkedin_posts && apifyEnabled()) {
@@ -90,6 +100,25 @@ export async function collectForSearchTerm(
     const maxClassifications = appCfg.collector_max_classifications;
     const watchType = term.type as WatchType;
 
+    // Multilingual aliases: generated once per shared term by the AI, then reused
+    // on every run. Lets the collector search translated keywords across language
+    // editions. Failure is non-fatal — we fall back to the original term only.
+    if (!term.aliases || term.aliases.length === 0) {
+      try {
+        const aliases = await generateAliases(term.query_display, watchType, pctx.model, pctx.variant);
+        if (aliases.length) {
+          await db.update(search_terms).set({ aliases }).where(eq(search_terms.id, term.id));
+          term.aliases = aliases;
+          console.log(`[collector] aliases for "${term.query_display}": ${aliases.map((a) => `${a.lang}:${a.q}`).join(', ')}`);
+        }
+      } catch (err) {
+        console.error(`[collector] alias generation failed for "${term.query_display}":`, err instanceof Error ? err.message : err);
+      }
+    }
+    // Prefilter accepts the original term OR any translated alias (an article is in
+    // one language → only the matching-language alias can hit).
+    const matchTerms = [term.query_normalized, ...(term.aliases ?? []).map((a) => a.q)];
+
     // Get context hint from the first active subscriber for this term
     const [sub] = await db.select({ context_hint: watch_items.context_hint })
       .from(watch_items)
@@ -116,7 +145,7 @@ export async function collectForSearchTerm(
       // newsroom) carry prefiltered=true and skip this.
       if (!cand.prefiltered) {
         const haystack = `${cand.title} ${cand.excerpt ?? ''}`;
-        if (!matchesQuery(term.query_normalized, haystack, watchType)) continue;
+        if (!matchTerms.some((mt) => matchesQuery(mt, haystack, watchType))) continue;
       }
 
       // --- Upsert article (global dedup on content_hash) ---

@@ -16,6 +16,16 @@ function geoParams(geo: GeoFilter): string {
   }
 }
 
+// Google News editions per language — used for multilingual alias searches so a
+// translated keyword is queried in its own-language edition.
+const LANG_EDITION: Record<string, string> = {
+  de: 'hl=de&gl=DE&ceid=DE:de',
+  en: 'hl=en&gl=US&ceid=US:en',
+  fr: 'hl=fr&gl=FR&ceid=FR:fr',
+  es: 'hl=es&gl=ES&ceid=ES:es',
+  it: 'hl=it&gl=IT&ceid=IT:it',
+};
+
 interface GnItem {
   title?: string;
   link?: string;
@@ -39,14 +49,16 @@ function sourceName(item: GnItem): string | undefined {
  * lookbackDays overrides the default 48h window — adds `after:YYYY-MM-DD` to the query
  * so Google surfaces older articles in the result set.
  */
-export async function fetchGoogleNews(query: string, geo: GeoFilter, lookbackDays?: number, maxResults = DEFAULT_MAX_RESULTS): Promise<SourceArticle[]> {
+export async function fetchGoogleNews(query: string, geo: GeoFilter, lookbackDays?: number, maxResults = DEFAULT_MAX_RESULTS, langEdition?: string): Promise<SourceArticle[]> {
   const effectiveDays = lookbackDays ?? 2;
   const afterDate = new Date(Date.now() - effectiveDays * 24 * 60 * 60 * 1000);
   // Add the after: operator only when we want to go further back than the default feed window
   const q = effectiveDays > 2
     ? `${query} after:${afterDate.toISOString().slice(0, 10)}`
     : query;
-  const url = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&${geoParams(geo)}`;
+  // For multilingual alias searches, query the keyword's own-language edition.
+  const edition = langEdition ? (LANG_EDITION[langEdition] ?? geoParams(geo)) : geoParams(geo);
+  const url = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&${edition}`;
 
   const feed = await withRetry(() => parser.parseURL(url), { label: `googleNews("${query}")` });
   const cutoff = afterDate.getTime();
@@ -65,7 +77,7 @@ export async function fetchGoogleNews(query: string, geo: GeoFilter, lookbackDay
         full_text: bodyText || undefined,  // RSS only provides snippet; stored as-is
         author: it.creator,
         published_at: published && !isNaN(published.getTime()) ? published : null,
-        source_language: geo === 'global' ? 'en' : 'de',
+        source_language: langEdition ?? (geo === 'global' ? 'en' : 'de'),
       };
     })
     .filter((a) => !a.published_at || a.published_at.getTime() >= cutoff)

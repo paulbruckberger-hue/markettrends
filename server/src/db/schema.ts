@@ -53,6 +53,11 @@ export const search_terms = pgTable('search_terms', {
     google_news: true, rss: true, newsroom: false
   }),
 
+  // Multilingual search aliases (DE/EN/FR/ES/IT), generated once per shared term
+  // by the AI on first collection. Each entry: { lang, q }. Empty = not yet generated.
+  // For companies/brands the name is kept unchanged across languages.
+  aliases: jsonb('aliases').$type<{ lang: string; q: string }[]>().default([]),
+
   is_active: boolean('is_active').notNull().default(true),  // true wenn ≥1 aktives Abo
   last_run_at: timestamp('last_run_at'),
   created_at: timestamp('created_at').defaultNow()
