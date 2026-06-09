@@ -1,5 +1,6 @@
 import { Delta, DetailBar, Empty, FeedCard, ItemActions, Spinner } from '../components/ui';
 import { Icon } from '../components/Icon';
+import { RunbackButton } from '../components/RunbackButton';
 import { GEO_META, toDisplayItem } from '../lib/presenter';
 import { flattenFeed, useFeed } from '../hooks/useArticles';
 import { useDeleteWatch, useRunWatch, useWatchlist } from '../hooks/useWatchlist';
@@ -33,9 +34,10 @@ export default function WatchDetailScreen({ id, actions, nav, back, flash }: {
     <>
       <DetailBar title={w.display_name} back={back} right={
         <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <button className="iconbtn" style={{ color: 'var(--accent)' }} onClick={() => { run.mutate({ id }); flash('Abruf gestartet …'); }}>
-            <Icon name="refresh" size={19} />
-          </button>
+          <RunbackButton busy={run.isPending} onRun={(days) => {
+            run.mutate({ id, lookback_days: days });
+            flash(days ? `Suche der letzten ${days} Tage gestartet …` : 'Abruf gestartet …');
+          }} />
           <button className="iconbtn" style={{ color: 'var(--neg)' }} title="Löschen" onClick={onDelete}>
             <Icon name="trash" size={19} />
           </button>
