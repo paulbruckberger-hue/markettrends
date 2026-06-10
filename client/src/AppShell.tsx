@@ -79,7 +79,7 @@ export default function AppShell() {
       case 'detail':
         return <DetailScreen item={current.params.item as DisplayItem} actions={actions} nav={nav} back={back} />;
       case 'competitor':
-        return <CompetitorScreen id={current.params.id as string} actions={actions} nav={nav} back={back} onCompose={() => setCompose(true)} />;
+        return <CompetitorScreen id={current.params.id as string} actions={actions} nav={nav} back={back} onCompose={() => setCompose(true)} flash={flash} />;
       case 'watch':
         return <WatchDetailScreen id={current.params.id as string} actions={actions} nav={nav} back={back} flash={flash} />;
       case 'profile':

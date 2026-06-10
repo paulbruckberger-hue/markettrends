@@ -4,21 +4,23 @@ import {
   SignalBadge, Sparkline, Spinner, Tabs,
 } from '../components/ui';
 import { Icon } from '../components/Icon';
+import { RunbackButton } from '../components/RunbackButton';
 import { GEO_META, RANK_META, SIGNAL_META, toDisplayItem } from '../lib/presenter';
 import { flattenFeed, useFeed } from '../hooks/useArticles';
 import { useCompetitor } from '../hooks/useCompetitor';
-import { useDeleteWatch } from '../hooks/useWatchlist';
+import { useDeleteWatch, useRunWatch } from '../hooks/useWatchlist';
 import { SignalType } from '../types';
 
 type Nav = (name: string, params?: Record<string, unknown>) => void;
 const PALETTE = ['#1d9bf0', '#7c5cff', '#00ba7c', '#f59e0b', '#f4212e', '#22d3ee'];
 
-export default function CompetitorScreen({ id, actions, nav, back, onCompose }: {
-  id: string; actions: ItemActions; nav: Nav; back: () => void; onCompose: () => void;
+export default function CompetitorScreen({ id, actions, nav, back, onCompose, flash }: {
+  id: string; actions: ItemActions; nav: Nav; back: () => void; onCompose: () => void; flash: (m: string) => void;
 }) {
   const [tab, setTab] = useState<'overview' | 'rivals' | 'moves'>('overview');
   const { data: d, isLoading } = useCompetitor(id);
   const { data: feedData } = useFeed({ watch_item_id: id });
+  const run = useRunWatch();
   const del = useDeleteWatch();
   const onDelete = () => {
     if (!window.confirm(`Beobachtung „${d?.subject ?? ''}" löschen?`)) return;
@@ -44,7 +46,10 @@ export default function CompetitorScreen({ id, actions, nav, back, onCompose }: 
     <>
       <DetailBar title={d.subject} back={back} right={
         <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <button className="iconbtn" style={{ color: 'var(--accent)' }}><Icon name="bell" size={19} /></button>
+          <RunbackButton busy={run.isPending} onRun={(days) => {
+            run.mutate({ id, lookback_days: days });
+            flash(days ? `Suche der letzten ${days} Tage gestartet …` : 'Abruf gestartet …');
+          }} />
           <button className="iconbtn" style={{ color: 'var(--neg)' }} title="Löschen" onClick={onDelete}><Icon name="trash" size={19} /></button>
         </div>
       } />

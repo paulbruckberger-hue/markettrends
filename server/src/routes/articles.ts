@@ -80,8 +80,16 @@ articlesRouter.get('/', async (req: AuthedRequest, res: Response) => {
   if (feedback) conditions.push(eq(user_article_state.user_feedback, feedback));
   if (cutoff) conditions.push(gte(articles.published_at, cutoff));
   if (search) {
+    // Full-content search across every article in the user's feed: the German
+    // executive headline + summary, plus the original title, snippet and full text.
     const like = `%${search}%`;
-    const searchCond = or(ilike(classifications.title, like), ilike(articles.original_title, like));
+    const searchCond = or(
+      ilike(classifications.title, like),
+      ilike(classifications.summary, like),
+      ilike(articles.original_title, like),
+      ilike(articles.raw_excerpt, like),
+      ilike(articles.full_text, like),
+    );
     if (searchCond) conditions.push(searchCond);
   }
 

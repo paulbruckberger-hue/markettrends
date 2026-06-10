@@ -18,8 +18,12 @@ export async function getActiveAiConfig(): Promise<{ model: AiModel; variant?: s
   return { model: 'claude', language: 'de' };
 }
 
-/** Global rank corrections (any user) — objective calibration for the base rank. */
-export async function loadGlobalFewShot(limit = 10): Promise<FewShotExample[]> {
+/**
+ * Rank corrections for ONE search term (any user) — objective calibration for
+ * that term's shared base rank. Term-scoped on purpose: corrections made on
+ * keyword A must never influence the base ranking of keyword B.
+ */
+export async function loadTermFewShot(searchTermId: string, limit = 10): Promise<FewShotExample[]> {
   try {
     const rows = await db
       .select({
@@ -30,7 +34,11 @@ export async function loadGlobalFewShot(limit = 10): Promise<FewShotExample[]> {
       .from(user_article_state)
       .innerJoin(classifications, eq(classifications.id, user_article_state.classification_id))
       .innerJoin(articles, eq(articles.id, classifications.article_id))
-      .where(and(isNotNull(user_article_state.user_rank_override), ne(user_article_state.user_rank_override, classifications.rank)))
+      .where(and(
+        eq(classifications.search_term_id, searchTermId),
+        isNotNull(user_article_state.user_rank_override),
+        ne(user_article_state.user_rank_override, classifications.rank),
+      ))
       .orderBy(desc(user_article_state.updated_at))
       .limit(limit);
     return rows
@@ -39,8 +47,8 @@ export async function loadGlobalFewShot(limit = 10): Promise<FewShotExample[]> {
   } catch { return []; }
 }
 
-/** One user's 👍/👎 relevance feedback (this user only). */
-export async function loadUserFeedback(userId: string, limit = 12): Promise<RelevanceExample[]> {
+/** One user's 👍/👎 relevance feedback for ONE search term (this user, this keyword only). */
+export async function loadUserFeedback(userId: string, searchTermId: string, limit = 12): Promise<RelevanceExample[]> {
   try {
     const rows = await db
       .select({
@@ -50,7 +58,11 @@ export async function loadUserFeedback(userId: string, limit = 12): Promise<Rele
       .from(user_article_state)
       .innerJoin(classifications, eq(classifications.id, user_article_state.classification_id))
       .innerJoin(articles, eq(articles.id, classifications.article_id))
-      .where(and(eq(user_article_state.user_id, userId), isNotNull(user_article_state.user_feedback)))
+      .where(and(
+        eq(user_article_state.user_id, userId),
+        eq(classifications.search_term_id, searchTermId),
+        isNotNull(user_article_state.user_feedback),
+      ))
       .orderBy(desc(user_article_state.updated_at))
       .limit(limit);
     return rows
@@ -59,8 +71,8 @@ export async function loadUserFeedback(userId: string, limit = 12): Promise<Rele
   } catch { return []; }
 }
 
-/** One user's own rank corrections (this user only). */
-export async function loadUserCorrections(userId: string, limit = 8): Promise<FewShotExample[]> {
+/** One user's own rank corrections for ONE search term (this user, this keyword only). */
+export async function loadUserCorrections(userId: string, searchTermId: string, limit = 8): Promise<FewShotExample[]> {
   try {
     const rows = await db
       .select({
@@ -73,6 +85,7 @@ export async function loadUserCorrections(userId: string, limit = 8): Promise<Fe
       .innerJoin(articles, eq(articles.id, classifications.article_id))
       .where(and(
         eq(user_article_state.user_id, userId),
+        eq(classifications.search_term_id, searchTermId),
         isNotNull(user_article_state.user_rank_override),
         ne(user_article_state.user_rank_override, classifications.rank),
       ))
@@ -90,7 +103,11 @@ export interface PersonalizeContext {
   model: AiModel;
   variant?: string;
   language: string;
-  /** Caches each user's feedback so we load it once per run, not per article. */
+  /**
+   * Caches each user's per-term feedback so we load it once per run, not per
+   * article. Key is `${userId}:${searchTermId}` — feedback is scoped to the
+   * keyword, so learning on one term never bleeds into another.
+   */
   cache: Map<string, UserSignals>;
 }
 
@@ -99,19 +116,25 @@ export async function makePersonalizeContext(): Promise<PersonalizeContext> {
   return { model: ai.model, variant: ai.variant, language: ai.language, cache: new Map() };
 }
 
-async function userSignals(userId: string, ctx: PersonalizeContext): Promise<UserSignals> {
-  const cached = ctx.cache.get(userId);
+async function userSignals(userId: string, searchTermId: string, ctx: PersonalizeContext): Promise<UserSignals> {
+  const key = `${userId}:${searchTermId}`;
+  const cached = ctx.cache.get(key);
   if (cached) return cached;
-  const [feedback, corrections] = await Promise.all([loadUserFeedback(userId), loadUserCorrections(userId)]);
+  const [feedback, corrections] = await Promise.all([
+    loadUserFeedback(userId, searchTermId),
+    loadUserCorrections(userId, searchTermId),
+  ]);
   const sig: UserSignals = { feedback, corrections, hasAny: feedback.length > 0 || corrections.length > 0 };
-  ctx.cache.set(userId, sig);
+  ctx.cache.set(key, sig);
   return sig;
 }
 
 /**
  * Compute & store a per-user personalised rank for one classification, for every
- * active subscriber of the term who has given feedback. Returns how many users
- * were personalised. Never throws — a failed user is logged and skipped.
+ * active subscriber of the term who has given feedback ON THIS TERM. Feedback is
+ * scoped to (user, search_term), so a user's 👍/👎 on one keyword never affects
+ * how their articles for another keyword are ranked. Returns how many users were
+ * personalised. Never throws — a failed user is logged and skipped.
  */
 export async function personalizeClassification(params: {
   ctx: PersonalizeContext;
@@ -129,7 +152,7 @@ export async function personalizeClassification(params: {
 
   let personalised = 0;
   for (const sub of subs) {
-    const sig = await userSignals(sub.user_id, ctx);
+    const sig = await userSignals(sub.user_id, params.searchTermId, ctx);
     if (!sig.hasAny) continue;
     try {
       const { rank, rank_reason } = await personalizeRank(

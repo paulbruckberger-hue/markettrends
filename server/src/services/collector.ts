@@ -5,7 +5,7 @@ import { contentHash } from '../lib/hash';
 import { matchesQuery } from '../lib/matchesQuery';
 import { classify, ClassificationInput, RANK_PROMPT_VERSION } from './ai/classifier';
 import { generateAliases } from './aliases';
-import { getActiveAiConfig, loadGlobalFewShot, makePersonalizeContext, personalizeClassification } from './personalize';
+import { getActiveAiConfig, loadTermFewShot, makePersonalizeContext, personalizeClassification } from './personalize';
 import { fetchGoogleNews } from './sources/googleNews';
 import { fetchLinkedInPosts } from './sources/apifyLinkedIn';
 import { fetchCompanyPagePosts } from './sources/apifyCompanyPage';
@@ -108,12 +108,13 @@ export async function collectForSearchTerm(
   };
 
   try {
-    // Base classification uses objective relevance + global rank-correction
-    // calibration only. Per-user 👍/👎 preferences are applied afterwards as a
-    // separate per-user re-rank (personalizeClassification).
+    // Base classification uses objective relevance + this term's own rank-correction
+    // calibration only (term-scoped: corrections on other keywords are ignored).
+    // Per-user 👍/👎 preferences are applied afterwards as a separate per-user,
+    // per-term re-rank (personalizeClassification).
     const [appCfg, fewShotExamples, pctx] = await Promise.all([
       getAppConfig(),
-      loadGlobalFewShot(),
+      loadTermFewShot(term.id),
       makePersonalizeContext(),
     ]);
     const maxClassifications = appCfg.collector_max_classifications;

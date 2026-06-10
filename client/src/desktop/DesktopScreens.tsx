@@ -502,12 +502,13 @@ function DeskRelated({ watchId, currentId, watchName, actions, nav }: {
 }
 
 // ════════════════════════════════════════ COMPETITOR ════════════════════════════════════════
-export function DeskCompetitor({ id, actions, nav, back, onCompose }: {
-  id: string; actions: ItemActions; nav: Nav; back: () => void; onCompose: () => void;
+export function DeskCompetitor({ id, actions, nav, back, onCompose, flash }: {
+  id: string; actions: ItemActions; nav: Nav; back: () => void; onCompose: () => void; flash: (m: string) => void;
 }) {
   const [tab, setTab] = useState<'overview' | 'rivals' | 'moves'>('overview');
   const { data: d, isLoading } = useCompetitor(id);
   const { data: feedData } = useFeed({ watch_item_id: id });
+  const run = useRunWatch();
   const del = useDeleteWatch();
   const onDelete = () => {
     if (!window.confirm(`Beobachtung „${d?.subject ?? ''}" löschen?`)) return;
@@ -530,7 +531,10 @@ export function DeskCompetitor({ id, actions, nav, back, onCompose }: {
       <DeskHeader title={d.subject} onBack={back}
         right={
           <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <button className="iconbtn" style={{ color: 'var(--accent)' }}><Icon name="bell" size={19} /></button>
+            <RunbackButton busy={run.isPending} onRun={(days) => {
+              run.mutate({ id, lookback_days: days });
+              flash(days ? `Suche der letzten ${days} Tage gestartet …` : 'Abruf gestartet …');
+            }} />
             <button className="iconbtn" style={{ color: 'var(--neg)' }} title="Löschen" onClick={onDelete}><Icon name="trash" size={19} /></button>
           </div>
         }

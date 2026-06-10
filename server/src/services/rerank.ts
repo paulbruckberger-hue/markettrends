@@ -1,9 +1,9 @@
 import { eq, lt, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { articles, classifications, search_terms } from '../db/schema';
-import { classify, ClassificationInput, RANK_PROMPT_VERSION } from './ai/classifier';
+import { classify, ClassificationInput, FewShotExample, RANK_PROMPT_VERSION } from './ai/classifier';
 import { getAppConfig } from '../lib/appConfig';
-import { loadGlobalFewShot, makePersonalizeContext, personalizeClassification } from './personalize';
+import { loadTermFewShot, makePersonalizeContext, personalizeClassification } from './personalize';
 import { WatchType } from '../types';
 
 export interface RerankProgress {
@@ -30,7 +30,18 @@ export async function rerankStatus(): Promise<RerankProgress> {
  */
 export async function rerankBatch(limit = 20): Promise<{ processed: number; personalised: number; remaining: number; done: boolean }> {
   const safeLimit = Math.min(40, Math.max(1, limit));
-  const [appCfg, fewShot, ctx] = await Promise.all([getAppConfig(), loadGlobalFewShot(), makePersonalizeContext()]);
+  const [appCfg, ctx] = await Promise.all([getAppConfig(), makePersonalizeContext()]);
+
+  // Few-shot calibration is term-scoped (corrections on keyword A never affect
+  // keyword B). Cache per term so a mixed batch loads each term's examples once.
+  const fewShotCache = new Map<string, FewShotExample[]>();
+  const termFewShot = async (termId: string): Promise<FewShotExample[]> => {
+    const hit = fewShotCache.get(termId);
+    if (hit) return hit;
+    const fs = await loadTermFewShot(termId);
+    fewShotCache.set(termId, fs);
+    return fs;
+  };
 
   const rows = await db.select({
     id: classifications.id,
@@ -61,7 +72,7 @@ export async function rerankBatch(limit = 20): Promise<{ processed: number; pers
     try {
       const result = await classify(input, ctx.model, ctx.variant, {
         rankCriteria: appCfg.rank_criteria,
-        fewShotExamples: fewShot,
+        fewShotExamples: await termFewShot(r.search_term_id),
       });
       await db.update(classifications).set({
         rank: result.rank,

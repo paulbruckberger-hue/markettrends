@@ -143,7 +143,7 @@ export default function DesktopShell() {
       case 'watchlist': return <DeskWatchlist nav={nav} onCompose={() => setCompose(true)} flash={flash} />;
       case 'analytics': return <DeskAnalytics nav={nav} />;
       case 'detail': return <DeskDetail item={current.params.item as DisplayItem} actions={actions} nav={nav} back={back} />;
-      case 'competitor': return <DeskCompetitor id={current.params.id as string} actions={actions} nav={nav} back={back} onCompose={() => setCompose(true)} />;
+      case 'competitor': return <DeskCompetitor id={current.params.id as string} actions={actions} nav={nav} back={back} onCompose={() => setCompose(true)} flash={flash} />;
       case 'watch': return <DeskWatchDetail id={current.params.id as string} actions={actions} nav={nav} back={back} flash={flash} />;
       case 'profile': return <DeskProfile actions={actions} nav={nav} me={me} />;
       case 'settings': return <DeskSettings theme={theme} setTheme={setTheme} accent={accent} setAccent={setAccent} me={me} onLogout={logout} nav={nav} />;
