@@ -7,6 +7,7 @@ import { db } from '../db/client';
 import { articles, classifications, newsletter_clusters, settings, users, watch_items } from '../db/schema';
 import { config } from '../config';
 import { AiModel, generateText } from './ai/classifier';
+import { signEmailFeedbackToken } from '../lib/emailToken';
 
 // ---------- Template ----------
 let templateFn: HandlebarsTemplateDelegate | null = null;
@@ -65,6 +66,8 @@ interface DigestArticle {
   watch_display_name: string;
   published_at: string;
   rank: number;
+  fb_up_url: string;
+  fb_down_url: string;
 }
 
 interface Section {
@@ -86,6 +89,7 @@ export interface MailData {
 }
 
 interface Row {
+  classification_id: string;
   rank: number;
   title: string;
   summary: string;
@@ -102,6 +106,7 @@ interface Row {
 async function loadRows(userId: string): Promise<Row[]> {
   const since = sql`now() - interval '7 days'`;
   return db.select({
+    classification_id: classifications.id,
     rank: classifications.rank,
     title: classifications.title,
     summary: classifications.summary,
@@ -126,7 +131,9 @@ async function loadRows(userId: string): Promise<Row[]> {
     .limit(120) as Promise<Row[]>;
 }
 
-function toArticle(r: Row): DigestArticle {
+function toArticle(r: Row, userId: string): DigestArticle {
+  const base = config.clientUrl ? `${config.clientUrl}/feedback` : '/feedback';
+  const token = signEmailFeedbackToken(userId, r.classification_id);
   return {
     title: r.title,
     summary: r.summary,
@@ -136,17 +143,19 @@ function toArticle(r: Row): DigestArticle {
     watch_display_name: r.watch_display_name,
     published_at: fmtDate(r.published_at ?? r.created_at),
     rank: r.rank,
+    fb_up_url: `${base}?t=${token}&v=up`,
+    fb_down_url: `${base}?t=${token}&v=down`,
   };
 }
 
 /** Build one section from its rows — capped to stay compact (5 top cards, 8 one-liners). */
-function buildSection(name: string, color: string, rows: Row[]): Section {
+function buildSection(name: string, color: string, rows: Row[], userId: string): Section {
   return {
     name,
     color,
     insight: '',
-    rank1Articles: rows.filter((r) => r.rank === 1).slice(0, 5).map(toArticle),
-    rank2Articles: rows.filter((r) => r.rank === 2).slice(0, 8).map(toArticle),
+    rank1Articles: rows.filter((r) => r.rank === 1).slice(0, 5).map((r) => toArticle(r, userId)),
+    rank2Articles: rows.filter((r) => r.rank === 2).slice(0, 8).map((r) => toArticle(r, userId)),
   };
 }
 
@@ -224,10 +233,10 @@ async function buildCombinedMail(userId: string, ai: { model: AiModel; variant?:
   for (const c of clusters) {
     if (c.delivery === 'separate') continue;
     const cRows = combinedRows.filter((r) => r.cluster_id === c.id);
-    if (cRows.length) sections.push(buildSection(c.name, c.color ?? '#3B82F6', cRows));
+    if (cRows.length) sections.push(buildSection(c.name, c.color ?? '#3B82F6', cRows, userId));
   }
   const unassigned = combinedRows.filter((r) => !r.cluster_id);
-  if (unassigned.length) sections.push(buildSection(UNASSIGNED_NAME, UNASSIGNED_COLOR, unassigned));
+  if (unassigned.length) sections.push(buildSection(UNASSIGNED_NAME, UNASSIGNED_COLOR, unassigned, userId));
 
   if (sections.length === 0) return null;
 
@@ -254,7 +263,7 @@ async function buildClusterMail(userId: string, clusterId: string, ai: { model: 
   const rows = (await loadRows(userId)).filter((r) => r.cluster_id === clusterId);
   if (rows.length === 0) return null;
 
-  const sections = [buildSection(cluster.name, cluster.color ?? '#3B82F6', rows)];
+  const sections = [buildSection(cluster.name, cluster.color ?? '#3B82F6', rows, userId)];
   const executiveSummary = await fillInsights(cluster.name, sections, ai)
     || `Aktuelle Signale zu „${cluster.name}".`;
 

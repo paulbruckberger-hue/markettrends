@@ -13,6 +13,7 @@ import { analyticsRouter } from './routes/analytics';
 import { settingsRouter } from './routes/settings';
 import { digestRouter } from './routes/digest';
 import { clustersRouter } from './routes/clusters';
+import { emailFeedbackRouter, feedbackPageHandler } from './routes/feedback';
 import { webhookRouter } from './routes/webhook';
 import { adminRouter } from './routes/admin';
 
@@ -56,11 +57,17 @@ async function start(): Promise<void> {
   app.use('/api/clusters', clustersRouter);
   app.use('/api/admin', adminRouter);
 
+  // Public, token-authenticated newsletter feedback (no JWT)
+  app.use('/api/feedback', emailFeedbackRouter);
+
   // Public Telegram webhook (secret-verified, no JWT)
   app.use('/webhook', webhookRouter);
 
   // 404 for unknown API routes
   app.use('/api', (_req, res) => res.status(404).json({ error: 'Route nicht gefunden' }));
+
+  // Newsletter feedback landing page — must be before the SPA catch-all.
+  app.get('/feedback', feedbackPageHandler);
 
   // Static frontend (SPA) — served from the same service when a build is present.
   const clientDir = process.env.CLIENT_DIR || path.join(__dirname, '../client-dist');
