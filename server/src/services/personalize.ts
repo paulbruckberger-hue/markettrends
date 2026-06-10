@@ -1,6 +1,6 @@
-import { and, desc, eq, isNotNull, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, ne, sql } from 'drizzle-orm';
 import { db } from '../db/client';
-import { articles, classifications, settings, user_article_state, users, watch_items } from '../db/schema';
+import { articles, classifications, search_terms, settings, user_article_state, users, watch_items } from '../db/schema';
 import {
   AiModel, FewShotExample, personalizeRank, RelevanceExample,
 } from './ai/classifier';
@@ -95,6 +95,80 @@ export async function loadUserCorrections(userId: string, searchTermId: string, 
       .filter((r) => r.user_rank !== null)
       .map((r) => ({ content: r.content.trim(), ai_rank: r.ai_rank, user_rank: r.user_rank as number }));
   } catch { return []; }
+}
+
+/**
+ * Immediate, automatic learning: right after a user gives feedback (in-app OR
+ * Telegram) on a term, re-rank that user's recent articles for the SAME term
+ * using their current 👍/👎 + rank corrections. No manual "Reranking" needed.
+ * User- and term-scoped + bounded so it's fast enough to await inside a request.
+ * If the user has no remaining signal for the term, personalisation is cleared
+ * (the feed falls back to the shared base rank). Returns rows touched.
+ */
+export async function repersonalizeUserTerm(userId: string, searchTermId: string, limit = 15): Promise<number> {
+  const [term] = await db.select({ query: search_terms.query_display, type: search_terms.type })
+    .from(search_terms).where(eq(search_terms.id, searchTermId));
+  if (!term) return 0;
+
+  const [feedback, corrections] = await Promise.all([
+    loadUserFeedback(userId, searchTermId),
+    loadUserCorrections(userId, searchTermId),
+  ]);
+
+  const rows = await db.select({
+    id: classifications.id,
+    baseRank: classifications.rank,
+    title: articles.original_title,
+    excerpt: articles.raw_excerpt,
+    full_text: articles.full_text,
+  })
+    .from(classifications)
+    .innerJoin(articles, eq(articles.id, classifications.article_id))
+    .where(eq(classifications.search_term_id, searchTermId))
+    .orderBy(desc(classifications.created_at))
+    .limit(Math.min(40, limit));
+
+  // No signal left for this term → clear any personalisation so the feed resets.
+  if (feedback.length === 0 && corrections.length === 0) {
+    const ids = rows.map((r) => r.id);
+    if (ids.length) {
+      await db.update(user_article_state)
+        .set({ personal_rank: null, personal_rank_reason: null, personal_rank_at: null, updated_at: new Date() })
+        .where(and(eq(user_article_state.user_id, userId), inArray(user_article_state.classification_id, ids)));
+    }
+    return 0;
+  }
+
+  const ai = await getActiveAiConfig();
+  const watchType = term.type as 'topic' | 'company';
+  let n = 0;
+  const CHUNK = 5;
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const ranks = await Promise.all(rows.slice(i, i + CHUNK).map(async (r) => {
+      const content = `${r.title ?? ''}\n\n${r.full_text ?? r.excerpt ?? ''}`.trim();
+      try {
+        const { rank, rank_reason } = await personalizeRank(
+          { content, searchQuery: term.query, watchType, baseRank: r.baseRank, language: ai.language },
+          ai.model, ai.variant,
+          { relevanceFeedback: feedback, fewShotExamples: corrections },
+        );
+        await db.insert(user_article_state).values({
+          user_id: userId, classification_id: r.id,
+          personal_rank: rank, personal_rank_reason: rank_reason || null, personal_rank_at: new Date(),
+        }).onConflictDoUpdate({
+          target: [user_article_state.user_id, user_article_state.classification_id],
+          set: { personal_rank: rank, personal_rank_reason: rank_reason || null, personal_rank_at: new Date(), updated_at: new Date() },
+        });
+        return 1;
+      } catch (err) {
+        console.error('[repersonalize] failed for', r.id, err instanceof Error ? err.message : err);
+        return 0;
+      }
+    }));
+    n += ranks.reduce((a: number, b) => a + b, 0);
+  }
+  if (n > 0) console.log(`[repersonalize] user ${userId} term ${searchTermId}: ${n} Artikel sofort neu personalisiert`);
+  return n;
 }
 
 interface UserSignals { feedback: RelevanceExample[]; corrections: FewShotExample[]; hasAny: boolean }

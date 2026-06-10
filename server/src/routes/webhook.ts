@@ -7,6 +7,7 @@ import {
   answerCallback, editMessageReplyMarkup, sendTelegramMessage,
 } from '../services/telegram';
 import { buildPushKeyboard } from '../services/notifications';
+import { repersonalizeUserTerm } from '../services/personalize';
 
 export const webhookRouter = Router();
 
@@ -25,16 +26,20 @@ webhookRouter.post('/telegram', async (req: Request, res: Response) => {
     res.sendStatus(401);
     return;
   }
-  res.sendStatus(200); // acknowledge immediately
-
+  // Process THEN acknowledge: on Cloud Run CPU is only allocated during the
+  // request, so the immediate-learning re-rank must finish before we respond
+  // (a button tap already got a fast answerCallback toast meanwhile). Bounded,
+  // so we stay well within Telegram's webhook timeout.
   try {
     if (req.body?.callback_query) {
       await handleCallback(req.body.callback_query);
-      return;
+    } else {
+      await handleMessage(req.body?.message);
     }
-    await handleMessage(req.body?.message);
   } catch (err) {
     console.error('[webhook] telegram error:', err instanceof Error ? err.message : err);
+  } finally {
+    res.sendStatus(200);
   }
 });
 
@@ -91,15 +96,24 @@ async function handleCallback(cb: any): Promise<void> {
     const dir = data.slice(3, 5);                 // 'up' | 'dn'
     const classificationId = data.slice('fb:xx:'.length);
     const feedback: 'up' | 'down' = dir === 'dn' ? 'down' : 'up';
-    const saved = await saveFeedback(userId, classificationId, feedback);
+    const termId = await saveFeedback(userId, classificationId, feedback);
+    // Fast toast first (stops the button spinner), keyboard ✓, THEN learn.
     await answerCallback(
       cb.id,
-      !saved ? 'Meldung nicht mehr verfügbar.'
-        : feedback === 'up' ? '👍 Danke! Du bekommst mehr solche Meldungen.'
-          : '👎 Danke! Solche Meldungen ranken wir für dich künftig niedriger.',
+      !termId ? 'Meldung nicht mehr verfügbar.'
+        : feedback === 'up' ? '👍 Danke! Die KI lernt sofort mit.'
+          : '👎 Danke! Solche Meldungen ranken wir für dich sofort niedriger.',
     );
-    if (saved && messageId) {
+    if (termId && messageId) {
       await editMessageReplyMarkup(String(chatId), messageId, buildPushKeyboard(classificationId, feedback));
+    }
+    // Immediate, automatic learning — same path as the in-app feedback.
+    if (termId) {
+      try {
+        await repersonalizeUserTerm(userId, termId);
+      } catch (err) {
+        console.error('[webhook] repersonalize failed:', err instanceof Error ? err.message : err);
+      }
     }
     return;
   }
@@ -116,16 +130,17 @@ async function findUserByChat(chatId: string): Promise<string | null> {
 
 /**
  * Persist a relevance vote on the same `user_article_state.user_feedback` column
- * the in-app 👍/👎 uses, so the next collector run feeds it into the per-keyword
- * `personalizeRank()`. Returns false if the user does not subscribe to the term.
+ * the in-app 👍/👎 uses (one unified feedback state across all channels). Returns
+ * the classification's search_term_id (for immediate re-ranking) or null if the
+ * user does not subscribe to the term.
  */
-async function saveFeedback(userId: string, classificationId: string, feedback: 'up' | 'down'): Promise<boolean> {
-  const [allowed] = await db.select({ id: classifications.id })
+async function saveFeedback(userId: string, classificationId: string, feedback: 'up' | 'down'): Promise<string | null> {
+  const [allowed] = await db.select({ search_term_id: classifications.search_term_id })
     .from(classifications)
     .innerJoin(watch_items, eq(watch_items.search_term_id, classifications.search_term_id))
     .where(and(eq(classifications.id, classificationId), eq(watch_items.user_id, userId)))
     .limit(1);
-  if (!allowed) return false;
+  if (!allowed) return null;
 
   await db.insert(user_article_state).values({
     user_id: userId,
@@ -135,7 +150,7 @@ async function saveFeedback(userId: string, classificationId: string, feedback: 
     target: [user_article_state.user_id, user_article_state.classification_id],
     set: { user_feedback: feedback, updated_at: new Date() },
   });
-  return true;
+  return allowed.search_term_id;
 }
 
 /** Send the full briefing for one classification (all bullets + context + tags). */

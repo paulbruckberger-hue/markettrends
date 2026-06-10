@@ -493,8 +493,10 @@ function RerankSection() {
   return (
     <Panel title="Reranking (Bestand neu bewerten)">
       <p style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.5, margin: '0 0 12px' }}>
-        Bewertet alle bestehenden Artikel mit dem aktuellen Ranking-Prompt neu und berechnet
-        für jeden Nutzer mit 👍/👎-Feedback einen personalisierten Rang. Läuft in Schüben — lass den Tab offen.
+        <b>Optional.</b> Dein 👍/👎-Feedback wird bereits <b>automatisch und sofort</b> verarbeitet
+        (die Artikel zum jeweiligen Keyword werden direkt neu personalisiert). Dieser Knopf bewertet
+        zusätzlich den <b>gesamten Altbestand</b> neu — z.B. nach einer Änderung des Ranking-Prompts.
+        Läuft in Schüben — lass den Tab offen.
       </p>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
         <span style={{ color: 'var(--text-2)' }}>Fortschritt</span>

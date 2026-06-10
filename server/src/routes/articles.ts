@@ -3,6 +3,7 @@ import { and, asc, desc, eq, gte, ilike, or, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { articles, classifications, user_article_state, watch_items } from '../db/schema';
 import { authMiddleware, AuthedRequest } from '../middleware/auth';
+import { repersonalizeUserTerm } from '../services/personalize';
 import { SourceTypeName } from '../types';
 
 export const articlesRouter = Router();
@@ -144,7 +145,7 @@ articlesRouter.patch('/:classificationId', async (req: AuthedRequest, res: Respo
   const b = req.body ?? {};
 
   // Ensure the user actually subscribes to this classification's term.
-  const [allowed] = await db.select({ id: classifications.id })
+  const [allowed] = await db.select({ id: classifications.id, search_term_id: classifications.search_term_id })
     .from(classifications)
     .innerJoin(watch_items, eq(watch_items.search_term_id, classifications.search_term_id))
     .where(and(eq(classifications.id, classificationId), eq(watch_items.user_id, userId)))
@@ -175,6 +176,17 @@ articlesRouter.patch('/:classificationId', async (req: AuthedRequest, res: Respo
     target: [user_article_state.user_id, user_article_state.classification_id],
     set,
   }).returning();
+
+  // Relevance feedback → learn immediately: re-rank this user's recent articles
+  // for the same term. Awaited so the feed refetch reflects the new order; the
+  // optimistic UI already flipped the button, so the latency is not user-blocking.
+  if (feedbackValid) {
+    try {
+      await repersonalizeUserTerm(userId, allowed.search_term_id);
+    } catch (err) {
+      console.error('[articles] repersonalize failed:', err instanceof Error ? err.message : err);
+    }
+  }
 
   res.json(state);
 });
