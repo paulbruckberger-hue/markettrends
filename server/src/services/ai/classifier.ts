@@ -6,10 +6,13 @@ import { RankCriteria, DEFAULT_RANK_CRITERIA } from '../../db/schema';
 export type AiModel = 'claude' | 'gemini' | 'deepseek';
 
 /**
- * Bumped whenever the base ranking prompt changes. Classifications carry the
- * version they were ranked with, so a bulk rerank can target only stale rows.
+ * Bumped whenever the base ranking prompt changes — or when ranking logic that
+ * affects stored ranks changes. Classifications carry the version they were
+ * ranked with, so a bulk rerank can target only stale rows.
+ * v2: few-shot calibration + per-user feedback are now scoped per search term
+ *     (no cross-keyword bleed) — forces a one-time re-rank of all existing rows.
  */
-export const RANK_PROMPT_VERSION = 1;
+export const RANK_PROMPT_VERSION = 2;
 
 export const SIGNAL_TYPES = [
   'product_launch', 'expansion', 'partnership', 'personnel',
