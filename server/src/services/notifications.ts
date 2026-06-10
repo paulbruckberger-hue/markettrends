@@ -1,7 +1,7 @@
 import { and, eq, gte, inArray, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { articles, classifications, settings, user_article_state, watch_items } from '../db/schema';
-import { sendTelegramMessage, telegramEnabled } from './telegram';
+import { InlineKeyboard, sendTelegramMessage, telegramEnabled } from './telegram';
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -14,6 +14,24 @@ interface NotifClassification {
   summary: string;
   source_url: string;
   source_name: string | null;
+}
+
+/**
+ * Action buttons under each push: request the full briefing, or give relevance
+ * feedback that trains the per-keyword AI ranking. `chosen` marks the tapped
+ * option with a ✓ when we rebuild the keyboard after a feedback tap.
+ * callback_data stays well under Telegram's 64-byte limit (prefix + UUID).
+ */
+export function buildPushKeyboard(classificationId: string, chosen?: 'up' | 'down'): InlineKeyboard {
+  return {
+    inline_keyboard: [
+      [{ text: 'ℹ️ Mehr Infos', callback_data: `info:${classificationId}` }],
+      [
+        { text: chosen === 'up' ? '✅ Relevant' : '👍 Relevant', callback_data: `fb:up:${classificationId}` },
+        { text: chosen === 'down' ? '✅ Weniger' : '👎 Weniger relevant', callback_data: `fb:dn:${classificationId}` },
+      ],
+    ],
+  };
 }
 
 function buildMessage(c: NotifClassification, watchName: string): string {
@@ -73,7 +91,7 @@ export async function fanOutForTerm(searchTermId: string): Promise<number> {
       if (state?.telegram_sent) continue;
 
       try {
-        await sendTelegramMessage(st.telegram_chat_id, buildMessage(c, sub.display_name));
+        await sendTelegramMessage(st.telegram_chat_id, buildMessage(c, sub.display_name), buildPushKeyboard(c.id));
         await db.insert(user_article_state).values({
           user_id: sub.user_id,
           classification_id: c.id,
