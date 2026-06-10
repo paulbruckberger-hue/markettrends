@@ -78,6 +78,13 @@
       "when": 1780930000000,
       "tag": "0010_search_term_aliases",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1781107801969,
+      "tag": "0011_newsletter_clusters",
+      "breakpoints": true
     }
   ]
 }

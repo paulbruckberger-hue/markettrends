@@ -32,6 +32,7 @@ watchlistRouter.get('/', async (req: AuthedRequest, res: Response) => {
     display_name: watch_items.display_name,
     label: watch_items.label,
     color: watch_items.color,
+    cluster_id: watch_items.cluster_id,
     is_active: watch_items.is_active,
     schedule_interval: watch_items.schedule_interval,
     context_hint: watch_items.context_hint,
@@ -139,6 +140,7 @@ watchlistRouter.put('/:id', async (req: AuthedRequest, res: Response) => {
   if (typeof b.display_name === 'string') patch.display_name = b.display_name.trim();
   if (typeof b.label === 'string') patch.label = b.label;
   if (typeof b.color === 'string') patch.color = b.color;
+  if (b.cluster_id === null || typeof b.cluster_id === 'string') patch.cluster_id = b.cluster_id;
   if (typeof b.is_active === 'boolean') patch.is_active = b.is_active;
   if (b.context_hint !== undefined) patch.context_hint = typeof b.context_hint === 'string' ? b.context_hint.trim() || null : null;
   if (Object.keys(patch).length === 0) {

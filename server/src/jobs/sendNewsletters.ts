@@ -1,13 +1,15 @@
 import { and, eq } from 'drizzle-orm';
 import { db, pool } from '../db/client';
 import { settings, users } from '../db/schema';
-import { sendNewsletter } from '../services/newsletter';
+import { sendDueNewsletters } from '../services/newsletter';
 
 const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
 /**
- * Newsletter job entrypoint (`node dist/jobs/sendNewsletters.js`).
- * Runs daily; sends to users whose newsletter_day matches today + enabled.
+ * Newsletter job entrypoint (`node dist/jobs/sendNewsletters.js`). Runs daily.
+ * Loads EVERY enabled recipient (not just those whose day is today) and lets
+ * sendDueNewsletters() decide what is due: the combined weekly mail only on the
+ * user's chosen day, plus any separate cluster mails on their own cadence.
  */
 async function main(): Promise<void> {
   const today = DAYS[new Date().getDay()];
@@ -16,15 +18,14 @@ async function main(): Promise<void> {
     .innerJoin(users, eq(users.id, settings.user_id))
     .where(and(
       eq(settings.newsletter_enabled, true),
-      eq(settings.newsletter_day, today),
       eq(users.is_active, true),
     ));
 
-  console.log(`[newsletter-job] ${today}: ${recipients.length} Empfänger`);
+  console.log(`[newsletter-job] ${today}: ${recipients.length} aktive Empfänger werden geprüft`);
   for (const r of recipients) {
     try {
-      const sent = await sendNewsletter(r.user_id);
-      console.log(`  user ${r.user_id}: ${sent ? 'gesendet' : 'übersprungen'}`);
+      const sent = await sendDueNewsletters(r.user_id, today);
+      console.log(`  user ${r.user_id}: ${sent} Mail(s) gesendet`);
     } catch (err) {
       console.error(`  user ${r.user_id} Fehler:`, err instanceof Error ? err.message : err);
     }

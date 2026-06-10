@@ -12,6 +12,7 @@ import { articlesRouter } from './routes/articles';
 import { analyticsRouter } from './routes/analytics';
 import { settingsRouter } from './routes/settings';
 import { digestRouter } from './routes/digest';
+import { clustersRouter } from './routes/clusters';
 import { webhookRouter } from './routes/webhook';
 import { adminRouter } from './routes/admin';
 
@@ -52,6 +53,7 @@ async function start(): Promise<void> {
   app.use('/api/analytics', analyticsRouter);
   app.use('/api/settings', settingsRouter);
   app.use('/api/digest', digestRouter);
+  app.use('/api/clusters', clustersRouter);
   app.use('/api/admin', adminRouter);
 
   // Public Telegram webhook (secret-verified, no JWT)

@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Markttrends Scouting – {{weekLabel}}</title>
+  <title>Markttrends Scouting – {{headline}} {{weekLabel}}</title>
 </head>
 <body style="margin:0;padding:0;background:#0A0F1E;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#E2E8F0;">
-  <div style="display:none;max-height:0;overflow:hidden;">Wochenrückblick: {{stats.total}} Signale, {{stats.rank1}} Top-Meldungen.</div>
+  <div style="display:none;max-height:0;overflow:hidden;">{{headline}}: {{stats.total}} Signale, {{stats.rank1}} Top-Meldungen.</div>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0A0F1E;padding:24px 0;">
     <tr><td align="center">
       <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:600px;">
@@ -14,14 +14,14 @@
         <!-- Header -->
         <tr><td style="padding:8px 24px 20px;">
           <div style="font-size:13px;letter-spacing:1px;color:#60A5FA;text-transform:uppercase;">Markttrends Scouting</div>
-          <div style="font-size:24px;font-weight:700;color:#F8FAFC;margin-top:4px;">Wochenrückblick</div>
+          <div style="font-size:24px;font-weight:700;color:#F8FAFC;margin-top:4px;">{{headline}}</div>
           <div style="font-size:14px;color:#94A3B8;margin-top:2px;">{{weekLabel}}</div>
         </td></tr>
 
         <!-- Executive Summary -->
         <tr><td style="padding:0 24px 16px;">
           <div style="background:#111827;border:1px solid #1E293B;border-radius:12px;padding:18px;">
-            <div style="font-size:13px;font-weight:700;color:#60A5FA;text-transform:uppercase;letter-spacing:.5px;">Executive Summary</div>
+            <div style="font-size:13px;font-weight:700;color:#60A5FA;text-transform:uppercase;letter-spacing:.5px;">Überblick</div>
             <div style="font-size:15px;line-height:1.6;color:#CBD5E1;margin-top:8px;">{{executiveSummary}}</div>
           </div>
         </td></tr>
@@ -43,50 +43,50 @@
           </tr></table>
         </td></tr>
 
-        <!-- Rank 1 -->
-        {{#if rank1Articles.length}}
-        <tr><td style="padding:0 24px 8px;"><div style="font-size:14px;font-weight:700;color:#F43F5E;">🔴 Top-Meldungen</div></td></tr>
-        {{#each rank1Articles}}
+        <!-- Cluster-Abschnitte -->
+        {{#each sections}}
+        <tr><td style="padding:6px 24px 6px;">
+          <div style="border-left:4px solid {{this.color}};padding:6px 0 6px 12px;">
+            <div style="font-size:16px;font-weight:700;color:#F8FAFC;text-transform:uppercase;letter-spacing:.5px;">{{this.name}}</div>
+            {{#if this.insight}}<div style="font-size:13px;line-height:1.55;color:#94A3B8;margin-top:4px;">{{this.insight}}</div>{{/if}}
+          </div>
+        </td></tr>
+
+        {{#each this.rank1Articles}}
         <tr><td style="padding:0 24px 12px;">
           <div style="background:#111827;border:1px solid #1E293B;border-left:3px solid #F43F5E;border-radius:10px;padding:16px;">
-            <div style="font-size:11px;color:#94A3B8;">{{this.watch_display_name}} · {{this.published_at}}</div>
+            <div style="font-size:11px;color:#94A3B8;">🔴 {{this.watch_display_name}} · {{this.published_at}}</div>
             <div style="font-size:16px;font-weight:700;color:#F8FAFC;margin:6px 0;">{{this.title}}</div>
             <div style="font-size:14px;line-height:1.55;color:#CBD5E1;">{{{this.summaryHtml}}}</div>
             <a href="{{this.source_url}}" style="display:inline-block;margin-top:10px;background:#2563EB;color:#fff;text-decoration:none;font-size:13px;font-weight:600;padding:7px 14px;border-radius:8px;">→ {{this.source_name}}</a>
           </div>
         </td></tr>
         {{/each}}
-        {{/if}}
 
-        <!-- Rank 2 -->
-        {{#if rank2Articles.length}}
-        <tr><td style="padding:8px 24px 8px;"><div style="font-size:14px;font-weight:700;color:#F59E0B;">🟠 Weitere relevante Meldungen</div></td></tr>
-        <tr><td style="padding:0 24px 12px;">
+        {{#if this.rank2Articles.length}}
+        <tr><td style="padding:0 24px 14px;">
           <div style="background:#111827;border:1px solid #1E293B;border-radius:10px;padding:8px 16px;">
-            {{#each rank2Articles}}
+            {{#each this.rank2Articles}}
             <div style="padding:10px 0;border-bottom:1px solid #1E293B;">
-              <a href="{{this.source_url}}" style="font-size:14px;font-weight:600;color:#E2E8F0;text-decoration:none;">{{this.title}}</a>
+              <a href="{{this.source_url}}" style="font-size:14px;font-weight:600;color:#E2E8F0;text-decoration:none;">🟠 {{this.title}}</a>
               <div style="font-size:11px;color:#94A3B8;margin-top:2px;">{{this.watch_display_name}} · {{this.source_name}}</div>
             </div>
             {{/each}}
           </div>
         </td></tr>
         {{/if}}
+        {{/each}}
 
-        <!-- Weekly Signal -->
-        {{#if weeklySignal}}
-        <tr><td style="padding:8px 24px 16px;">
-          <div style="background:linear-gradient(135deg,#1E3A6E,#0F3460);border-radius:12px;padding:18px;">
-            <div style="font-size:13px;font-weight:700;color:#93C5FD;text-transform:uppercase;letter-spacing:.5px;">📈 Markttrend der Woche</div>
-            <div style="font-size:15px;line-height:1.6;color:#F1F5F9;margin-top:8px;">{{weeklySignal}}</div>
-          </div>
+        {{#unless hasContent}}
+        <tr><td style="padding:0 24px 20px;">
+          <div style="font-size:14px;color:#94A3B8;text-align:center;">Diese Woche keine relevanten Meldungen in deinen Beobachtungen.</div>
         </td></tr>
-        {{/if}}
+        {{/unless}}
 
         <!-- Footer -->
         <tr><td style="padding:16px 24px 8px;text-align:center;">
           {{#if webViewUrl}}<a href="{{webViewUrl}}" style="color:#60A5FA;font-size:13px;text-decoration:none;">Im Browser öffnen</a><br/>{{/if}}
-          <div style="font-size:11px;color:#64748B;margin-top:8px;">Markttrends Scouting · automatisch generierter Wochenüberblick</div>
+          <div style="font-size:11px;color:#64748B;margin-top:8px;">Markttrends Scouting · automatisch generierter Überblick</div>
         </td></tr>
 
       </table>

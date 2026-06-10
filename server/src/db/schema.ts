@@ -11,6 +11,8 @@ export const sourceTypeEnum = pgEnum('source_type', [
   'linkedin_post', 'linkedin_company', 'google_news', 'rss', 'newsroom'
 ]);
 export const sentimentEnum = pgEnum('sentiment', ['positive', 'negative', 'neutral']);
+export const newsletterCadenceEnum = pgEnum('newsletter_cadence', ['weekly', 'daily']);
+export const clusterDeliveryEnum = pgEnum('cluster_delivery', ['combined', 'separate']);
 export const signalTypeEnum = pgEnum('signal_type', [
   'product_launch', 'expansion', 'partnership', 'personnel',
   'funding', 'regulatory', 'earnings', 'general'
@@ -76,6 +78,9 @@ export const watch_items = pgTable('watch_items', {
   display_name: text('display_name').notNull(),  // wie der User es nennt
   label: text('label'),                          // Kategorie z.B. "Wettbewerber"
   color: text('color').default('#3B82F6'),
+  // Optional: Newsletter-Themen-Cluster, dem dieses Abo zugeordnet ist.
+  // null = "Übrige Beobachtungen"-Sammelabschnitt im Newsletter.
+  cluster_id: uuid('cluster_id').references((): any => newsletter_clusters.id, { onDelete: 'set null' }),
   is_active: boolean('is_active').notNull().default(true),
   // null = default global schedule (every 6h); 'manual' = never auto-run; '24h' | '168h' = daily/weekly
   schedule_interval: text('schedule_interval'),
@@ -199,6 +204,24 @@ export const settings = pgTable('settings', {
 
   updated_at: timestamp('updated_at').defaultNow()
 });
+
+// ---------- Newsletter Clusters (pro User: Themen-Bündel für den Newsletter) ----------
+// Der User gruppiert seine Beobachtungen (watch_items.cluster_id) in Cluster.
+// delivery='combined' → eigener Abschnitt in der EINEN Sammelmail (Hybrid-Default).
+// delivery='separate' → eigene, fokussierte Mail mit eigenem Rhythmus (cadence/day).
+export const newsletter_clusters = pgTable('newsletter_clusters', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  user_id: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  color: text('color').default('#3B82F6'),
+  delivery: clusterDeliveryEnum('delivery').notNull().default('combined'),
+  cadence: newsletterCadenceEnum('cadence').notNull().default('weekly'),
+  day: text('day').default('monday'),            // nur relevant bei cadence='weekly'
+  sort_order: integer('sort_order').notNull().default(0),
+  created_at: timestamp('created_at').defaultNow(),
+}, (t) => ({
+  userIdx: index('idx_clusters_user').on(t.user_id),
+}));
 
 // ---------- App Config (global, Admin-verwaltet, immer Zeile id=1) ----------
 export interface RankCriteria {
