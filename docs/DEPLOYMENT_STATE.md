@@ -16,6 +16,7 @@
 - **SMTP:** smtp.gmail.com:587, User: noreplymarkettrendsnews@gmail.com (App-Passwort gesetzt).
 - **Feedback-Modul:** Rang-Override im Feed live — RankBadge klickbar, Popover [1][2][3][↺].
 - **Telegram-Pushes mit Buttons** (rev 00030): „Mehr Infos" + 👍/👎-Relevanz-Feedback (callback_query → user_article_state.user_feedback → personalizeRank).
+- **Sofort-Lernen aus Feedback** (rev 00032): jedes 👍/👎 (in-app ODER Telegram) löst sofort `repersonalizeUserTerm()` aus → die Artikel des Users zum Keyword werden direkt neu personalisiert (kein manuelles „Reranking" mehr nötig; der Knopf ist nur noch für Altbestand/Prompt-Upgrades). Webhook antwortet jetzt erst NACH Verarbeitung (Cloud Run throttelt CPU nach Response).
 - **Newsletter-Themen-Cluster** (rev 00031, Migration 0011): Einstellungen → Themen-Cluster. Hybrid-Versand — eine Sammelmail mit Abschnitt je Cluster ('combined') + separate Cluster-Mails mit eigenem Rhythmus ('separate', weekly/daily). KI-Vorschlag (/api/clusters/suggest) gruppiert Keywords. Newsletter-Job läuft jetzt täglich für alle Empfänger.
 - **DB:** Supabase (Session Pooler, eu-west-1) – läuft, Migrationen + Seed beim Start.
 
