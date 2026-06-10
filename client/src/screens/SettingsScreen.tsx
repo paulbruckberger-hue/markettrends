@@ -110,6 +110,7 @@ export default function SettingsScreen({ theme, setTheme, accent, setAccent, bac
                 right={<span style={{ color: 'var(--text-3)', fontSize: 12.5, fontWeight: 700 }}>Aus</span>} />}
         <Row icon="calendar" title="Wochen-Briefing" sub={s?.newsletter_enabled ? `${s.newsletter_day ?? 'Montag'}, ${s.newsletter_time ?? '07:00'}` : 'Deaktiviert'}
           right={<Toggle on={!!s?.newsletter_enabled} onChange={(v) => set({ newsletter_enabled: v })} />} />
+        <Row icon="grid" title="Themen-Cluster" sub="Newsletter nach Themen bündeln" right={<Chevron />} onClick={() => nav('clusters')} />
         <div className="hr" />
 
         <SectionLabel>KI & Daten</SectionLabel>

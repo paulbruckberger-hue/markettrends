@@ -10,7 +10,7 @@ import { AuthUser } from '../types';
 import { ComposeModal } from './deskChrome';
 import { RightRail } from './RightRail';
 import {
-  DeskAdmin, DeskAnalytics, DeskCompetitor, DeskDetail, DeskExplore, DeskFeed,
+  DeskAdmin, DeskAnalytics, DeskClusters, DeskCompetitor, DeskDetail, DeskExplore, DeskFeed,
   DeskProfile, DeskSettings, DeskWatchDetail, DeskWatchlist,
 } from './DesktopScreens';
 
@@ -134,7 +134,7 @@ export default function DesktopShell() {
   const activeTab = TAB_ROUTES.includes(current.name) ? current.name
     : current.name === 'detail' ? 'feed'
       : (current.name === 'competitor' || current.name === 'watch') ? 'watchlist'
-        : current.name === 'admin' ? 'settings' : '';
+        : (current.name === 'admin' || current.name === 'clusters') ? 'settings' : '';
 
   const center = (() => {
     switch (current.name) {
@@ -148,6 +148,7 @@ export default function DesktopShell() {
       case 'profile': return <DeskProfile actions={actions} nav={nav} me={me} />;
       case 'settings': return <DeskSettings theme={theme} setTheme={setTheme} accent={accent} setAccent={setAccent} me={me} onLogout={logout} nav={nav} />;
       case 'admin': return <DeskAdmin back={back} />;
+      case 'clusters': return <DeskClusters back={back} flash={flash} />;
       default: return null;
     }
   })();

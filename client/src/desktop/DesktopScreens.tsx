@@ -7,6 +7,7 @@ import {
 import { Icon } from '../components/Icon';
 import { Chevron } from '../components/ui';
 import { RunbackButton } from '../components/RunbackButton';
+import ClusterManager from '../components/ClusterManager';
 import {
   CompareChart, EmergingTags, LastUpdated, PeriodSwitch, SectionHead, SuggestionsSection, TodayBanner, TrendList,
 } from '../components/trends';
@@ -902,6 +903,7 @@ export function DeskSettings({ theme, setTheme, accent, setAccent, me, onLogout,
                 right={<span style={{ color: 'var(--accent)', fontSize: 12.5, fontWeight: 700 }}>Verbinden →</span>} />
             : <SetRow icon="bolt" title="Telegram" sub="Nicht verfügbar"
                 right={<span style={{ color: 'var(--text-3)', fontSize: 12.5, fontWeight: 700 }}>Aus</span>} />}
+        <SetRow icon="grid" title="Themen-Cluster" sub="Newsletter nach Themen bündeln" right={<Chevron />} onClick={() => nav('clusters')} />
         <SetRow icon="calendar" title="Wochen-Briefing" sub={s?.newsletter_enabled ? `${s.newsletter_day ?? 'Montag'}, ${s.newsletter_time ?? '07:00'}` : 'Deaktiviert'}
           right={<span style={{ color: s?.newsletter_enabled ? 'var(--pos)' : 'var(--text-3)', fontSize: 12.5, fontWeight: 700 }}>{s?.newsletter_enabled ? 'An' : 'Aus'}</span>} />
         <div className="hr" />
@@ -927,6 +929,17 @@ export function DeskAdmin({ back }: { back: () => void }) {
       <DeskHeader title="Administration" onBack={back} />
       <div className="dt-scroll scroll" style={{ flex: 1, paddingTop: 8 }}>
         <AdminSections />
+      </div>
+    </>
+  );
+}
+
+export function DeskClusters({ back, flash }: { back: () => void; flash: (m: string) => void }) {
+  return (
+    <>
+      <DeskHeader title="Themen-Cluster" onBack={back} />
+      <div className="dt-scroll scroll" style={{ flex: 1, paddingTop: 8 }}>
+        <ClusterManager flash={flash} />
       </div>
     </>
   );

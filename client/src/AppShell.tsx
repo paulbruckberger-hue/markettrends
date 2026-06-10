@@ -15,6 +15,7 @@ import CompetitorScreen from './screens/CompetitorScreen';
 import WatchDetailScreen from './screens/WatchDetailScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import SettingsScreen from './screens/SettingsScreen';
+import ClustersScreen from './screens/ClustersScreen';
 import ComposeSheet from './screens/ComposeSheet';
 import Onboarding from './screens/Onboarding';
 import AdminScreen from './screens/AdminScreen';
@@ -88,13 +89,15 @@ export default function AppShell() {
         return <SettingsScreen theme={theme} setTheme={setTheme} accent={accent} setAccent={setAccent} back={back} me={me} onLogout={logout} nav={nav} />;
       case 'admin':
         return <AdminScreen back={back} />;
+      case 'clusters':
+        return <ClustersScreen back={back} flash={flash} />;
       default:
         return null;
     }
   };
 
   const activeTab = TAB_ROUTES.includes(current.name) ? current.name : '';
-  const showBottomNav = !['detail', 'settings', 'admin'].includes(current.name);
+  const showBottomNav = !['detail', 'settings', 'admin', 'clusters'].includes(current.name);
   const routeKey = `${current.name}|${(current.params.id as string) ?? (current.params.item as DisplayItem | undefined)?.id ?? ''}`;
 
   return (

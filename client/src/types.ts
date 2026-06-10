@@ -29,6 +29,7 @@ export interface WatchItem {
   display_name: string;
   label: string | null;
   color: string | null;
+  cluster_id: string | null;
   is_active: boolean;
   schedule_interval: ScheduleInterval;
   context_hint: string | null;
@@ -91,6 +92,28 @@ export interface FeedResponse {
 }
 
 export type AiModel = 'claude' | 'gemini' | 'deepseek';
+
+export type ClusterDelivery = 'combined' | 'separate';
+export type NewsletterCadence = 'weekly' | 'daily';
+
+export interface NewsletterCluster {
+  id: string;
+  user_id: string;
+  name: string;
+  color: string | null;
+  delivery: ClusterDelivery;
+  cadence: NewsletterCadence;
+  day: string | null;
+  sort_order: number;
+  created_at: string | null;
+  member_ids: string[];
+}
+
+export interface SuggestedCluster {
+  name: string;
+  color: string;
+  member_ids: string[];
+}
 
 export interface AppSettings {
   user_id: string;
