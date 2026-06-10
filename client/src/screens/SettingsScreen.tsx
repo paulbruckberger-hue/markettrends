@@ -49,6 +49,7 @@ export default function SettingsScreen({ theme, setTheme, accent, setAccent, bac
   const { data: s } = useSettings();
   const update = useUpdateSettings();
   const set = (patch: Parameters<typeof update.mutate>[0]) => update.mutate(patch);
+  const tgLink = s?.telegram_bot_username && me ? `https://t.me/${s.telegram_bot_username}?start=${me.id}` : null;
 
   return (
     <>
@@ -98,8 +99,15 @@ export default function SettingsScreen({ theme, setTheme, accent, setAccent, bac
         <SectionLabel>Benachrichtigungen</SectionLabel>
         <Row icon="bell" title="P1-Signale sofort" sub="Push bei kritischen Signalen"
           right={<Toggle on={!!s?.notify_rank_1} onChange={(v) => set({ notify_rank_1: v })} />} />
-        <Row icon="bolt" title="Telegram" sub={s?.telegram_connected ? 'Verbunden' : 'Nicht verbunden'}
-          right={<span style={{ color: s?.telegram_connected ? 'var(--pos)' : 'var(--text-3)', fontSize: 12.5, fontWeight: 700 }}>{s?.telegram_connected ? 'Aktiv' : 'Aus'}</span>} />
+        {s?.telegram_connected
+          ? <Row icon="bolt" title="Telegram" sub="Verbunden"
+              right={<span style={{ color: 'var(--pos)', fontSize: 12.5, fontWeight: 700 }}>Aktiv</span>} />
+          : tgLink
+            ? <Row icon="bolt" title="Telegram" sub="Tippen, um Push zu verbinden"
+                onClick={() => window.open(tgLink, '_blank', 'noopener')}
+                right={<span style={{ color: 'var(--accent)', fontSize: 12.5, fontWeight: 700 }}>Verbinden →</span>} />
+            : <Row icon="bolt" title="Telegram" sub="Nicht verfügbar"
+                right={<span style={{ color: 'var(--text-3)', fontSize: 12.5, fontWeight: 700 }}>Aus</span>} />}
         <Row icon="calendar" title="Wochen-Briefing" sub={s?.newsletter_enabled ? `${s.newsletter_day ?? 'Montag'}, ${s.newsletter_time ?? '07:00'}` : 'Deaktiviert'}
           right={<Toggle on={!!s?.newsletter_enabled} onChange={(v) => set({ newsletter_enabled: v })} />} />
         <div className="hr" />

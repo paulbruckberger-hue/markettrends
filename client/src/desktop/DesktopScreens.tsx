@@ -846,6 +846,7 @@ export function DeskSettings({ theme, setTheme, accent, setAccent, me, onLogout,
   me: AuthUser | undefined; onLogout: () => void; nav: Nav;
 }) {
   const { data: s } = useSettings();
+  const tgLink = s?.telegram_bot_username && me ? `https://t.me/${s.telegram_bot_username}?start=${me.id}` : null;
   return (
     <>
       <DeskHeader title="Einstellungen" />
@@ -892,8 +893,15 @@ export function DeskSettings({ theme, setTheme, accent, setAccent, me, onLogout,
         <SectionLabel>Benachrichtigungen</SectionLabel>
         <SetRow icon="bell" title="P1-Signale sofort" sub="Push bei kritischen Signalen"
           right={<span style={{ color: s?.notify_rank_1 ? 'var(--pos)' : 'var(--text-3)', fontSize: 12.5, fontWeight: 700 }}>{s?.notify_rank_1 ? 'An' : 'Aus'}</span>} />
-        <SetRow icon="bolt" title="Telegram" sub={s?.telegram_connected ? 'Verbunden' : 'Nicht verbunden'}
-          right={<span style={{ color: s?.telegram_connected ? 'var(--pos)' : 'var(--text-3)', fontSize: 12.5, fontWeight: 700 }}>{s?.telegram_connected ? 'Aktiv' : 'Aus'}</span>} />
+        {s?.telegram_connected
+          ? <SetRow icon="bolt" title="Telegram" sub="Verbunden"
+              right={<span style={{ color: 'var(--pos)', fontSize: 12.5, fontWeight: 700 }}>Aktiv</span>} />
+          : tgLink
+            ? <SetRow icon="bolt" title="Telegram" sub="Klicken, um Push zu verbinden"
+                onClick={() => window.open(tgLink, '_blank', 'noopener')}
+                right={<span style={{ color: 'var(--accent)', fontSize: 12.5, fontWeight: 700 }}>Verbinden →</span>} />
+            : <SetRow icon="bolt" title="Telegram" sub="Nicht verfügbar"
+                right={<span style={{ color: 'var(--text-3)', fontSize: 12.5, fontWeight: 700 }}>Aus</span>} />}
         <SetRow icon="calendar" title="Wochen-Briefing" sub={s?.newsletter_enabled ? `${s.newsletter_day ?? 'Montag'}, ${s.newsletter_time ?? '07:00'}` : 'Deaktiviert'}
           right={<span style={{ color: s?.newsletter_enabled ? 'var(--pos)' : 'var(--text-3)', fontSize: 12.5, fontWeight: 700 }}>{s?.newsletter_enabled ? 'An' : 'Aus'}</span>} />
         <div className="hr" />
