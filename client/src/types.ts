@@ -124,8 +124,12 @@ export interface AppSettings {
   telegram_connected: boolean | null;
   notify_rank_1: boolean | null;
   notify_rank_2: boolean | null;
+  daily_push_enabled: boolean | null;
+  daily_push_hour: number | null;
+  breaking_alerts_enabled: boolean | null;
   newsletter_email: string | null;
   newsletter_enabled: boolean | null;
+  newsletter_frequency: 'weekly' | 'few' | 'daily' | null;
   newsletter_day: string | null;
   newsletter_time: string | null;
   newsletter_last_sent: string | null;

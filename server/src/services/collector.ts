@@ -10,7 +10,7 @@ import { fetchGoogleNews } from './sources/googleNews';
 import { fetchLinkedInPosts } from './sources/apifyLinkedIn';
 import { fetchCompanyPagePosts } from './sources/apifyCompanyPage';
 import { apifyEnabled } from './sources/apifyClient';
-import { fanOutForTerm } from './notifications';
+import { fanOutBreaking } from './notifications';
 import { SourceArticle } from './sources/types';
 import { GeoFilter, WatchType } from '../types';
 import { getAppConfig, AppConfig } from '../lib/appConfig';
@@ -238,6 +238,7 @@ export async function collectForSearchTerm(
         tags: result.tags,
         entities: result.entities ?? [],
         signal_type: watchType === 'company' ? (result.signal_type ?? 'general') : null,
+        breaking: result.breaking,
         ai_model_used: pctx.variant ?? pctx.model,
         rank_prompt_version: RANK_PROMPT_VERSION,
       }).onConflictDoNothing({ target: [classifications.article_id, classifications.search_term_id] })
@@ -274,11 +275,12 @@ export async function collectForSearchTerm(
 
     await db.update(search_terms).set({ last_run_at: new Date() }).where(eq(search_terms.id, term.id));
 
-    // Notifications fan-out per subscriber (idempotent via telegram_sent).
+    // Instant push ONLY for rare "breaking" items (idempotent via telegram_sent).
+    // Everything else is bundled into the once-daily briefing, never per-article.
     try {
-      await fanOutForTerm(term.id);
+      await fanOutBreaking(term.id);
     } catch (err) {
-      console.error(`[collector] notification fan-out failed for term ${term.id}:`, err instanceof Error ? err.message : err);
+      console.error(`[collector] breaking fan-out failed for term ${term.id}:`, err instanceof Error ? err.message : err);
     }
   } catch (err) {
     summary.status = 'error';

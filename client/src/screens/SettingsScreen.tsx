@@ -42,6 +42,31 @@ const THEMES: { k: Theme; label: string; swatch: string }[] = [
   { k: 'dark', label: 'Schwarz', swatch: '#000' },
 ];
 
+const PUSH_HOURS = [6, 7, 8, 9, 12, 18, 20];
+const FREQ_OPTS: { k: 'weekly' | 'few' | 'daily'; label: string }[] = [
+  { k: 'weekly', label: 'Wöchentlich' }, { k: 'few', label: '2–3×/Woche' }, { k: 'daily', label: 'Täglich' },
+];
+const FREQ_LABEL: Record<string, string> = { weekly: 'Wöchentlich', few: '2–3× pro Woche', daily: 'Täglich' };
+
+function Pills<T extends string | number>({ options, value, onChange }: {
+  options: { k: T; label: string }[]; value: T; onChange: (v: T) => void;
+}) {
+  return (
+    <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', padding: '2px 16px 14px' }}>
+      {options.map((o) => {
+        const on = value === o.k;
+        return (
+          <button key={String(o.k)} className="press" onClick={() => onChange(o.k)} style={{
+            padding: '7px 12px', borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            border: '1px solid ' + (on ? 'var(--accent)' : 'var(--border-strong)'),
+            background: on ? 'var(--accent-soft)' : 'transparent', color: on ? 'var(--accent)' : 'var(--text-2)',
+          }}>{o.label}</button>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function SettingsScreen({ theme, setTheme, accent, setAccent, back, me, onLogout, nav }: {
   theme: Theme; setTheme: (t: Theme) => void; accent: string; setAccent: (a: string) => void;
   back: () => void; me: AuthUser | undefined; onLogout: () => void; nav: Nav;
@@ -97,8 +122,6 @@ export default function SettingsScreen({ theme, setTheme, accent, setAccent, bac
         <div className="hr" />
 
         <SectionLabel>Benachrichtigungen</SectionLabel>
-        <Row icon="bell" title="P1-Signale sofort" sub="Push bei kritischen Signalen"
-          right={<Toggle on={!!s?.notify_rank_1} onChange={(v) => set({ notify_rank_1: v })} />} />
         {s?.telegram_connected
           ? <Row icon="bolt" title="Telegram" sub="Verbunden"
               right={<span style={{ color: 'var(--pos)', fontSize: 12.5, fontWeight: 700 }}>Aktiv</span>} />
@@ -108,8 +131,21 @@ export default function SettingsScreen({ theme, setTheme, accent, setAccent, bac
                 right={<span style={{ color: 'var(--accent)', fontSize: 12.5, fontWeight: 700 }}>Verbinden →</span>} />
             : <Row icon="bolt" title="Telegram" sub="Nicht verfügbar"
                 right={<span style={{ color: 'var(--text-3)', fontSize: 12.5, fontWeight: 700 }}>Aus</span>} />}
-        <Row icon="calendar" title="Wochen-Briefing" sub={s?.newsletter_enabled ? `${s.newsletter_day ?? 'Montag'}, ${s.newsletter_time ?? '07:00'}` : 'Deaktiviert'}
+
+        <Row icon="bell" title="Tagesbriefing" sub={s?.daily_push_enabled ? `1× täglich · ${String(s.daily_push_hour ?? 8).padStart(2, '0')}:00 Uhr · Top 3–5` : 'Aus'}
+          right={<Toggle on={!!s?.daily_push_enabled} onChange={(v) => set({ daily_push_enabled: v })} />} />
+        {s?.daily_push_enabled && (
+          <Pills options={PUSH_HOURS.map((h) => ({ k: h, label: `${String(h).padStart(2, '0')}:00` }))}
+            value={s?.daily_push_hour ?? 8} onChange={(h) => set({ daily_push_hour: h })} />
+        )}
+        <Row icon="flame" title="Breaking-Alerts" sub="Sofort – nur bei marktbewegenden Ereignissen"
+          right={<Toggle on={!!s?.breaking_alerts_enabled} onChange={(v) => set({ breaking_alerts_enabled: v })} />} />
+
+        <Row icon="mail" title="Newsletter (E-Mail)" sub={s?.newsletter_enabled ? `${FREQ_LABEL[s.newsletter_frequency ?? 'weekly']} · alle Details` : 'Aus'}
           right={<Toggle on={!!s?.newsletter_enabled} onChange={(v) => set({ newsletter_enabled: v })} />} />
+        {s?.newsletter_enabled && (
+          <Pills options={FREQ_OPTS} value={s?.newsletter_frequency ?? 'weekly'} onChange={(f) => set({ newsletter_frequency: f })} />
+        )}
         <Row icon="grid" title="Themen-Cluster" sub="Newsletter nach Themen bündeln" right={<Chevron />} onClick={() => nav('clusters')} />
         <div className="hr" />
 

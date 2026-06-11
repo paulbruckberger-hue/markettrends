@@ -19,7 +19,7 @@ import { flattenFeed, useFeed } from '../hooks/useArticles';
 import { useDeleteWatch, useRunWatch, useWatchlist } from '../hooks/useWatchlist';
 import { useOverview, useWatchAnalytics } from '../hooks/useAnalytics';
 import { useCompetitor } from '../hooks/useCompetitor';
-import { useSettings } from '../hooks/useSettings';
+import { useSettings, useUpdateSettings } from '../hooks/useSettings';
 import { ACCENTS, Theme } from '../lib/theme';
 import { AuthUser, SignalType, SourceTypeName, WatchItem } from '../types';
 import { DeskHeader, ViewSwitch } from './deskChrome';
@@ -842,11 +842,49 @@ function SetRow({ icon, title, sub, right, onClick, color }: {
   );
 }
 
+function DToggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button className="press" onClick={(e) => { e.stopPropagation(); onChange(!on); }} style={{
+      width: 46, height: 28, borderRadius: 999, background: on ? 'var(--accent)' : 'var(--border-strong)',
+      border: 'none', position: 'relative', cursor: 'pointer', transition: 'background .15s', flexShrink: 0,
+    }}>
+      <span style={{ position: 'absolute', top: 3, left: on ? 21 : 3, width: 22, height: 22, borderRadius: '50%', background: '#fff', transition: 'left .15s' }} />
+    </button>
+  );
+}
+
+function DPills<T extends string | number>({ options, value, onChange }: {
+  options: { k: T; label: string }[]; value: T; onChange: (v: T) => void;
+}) {
+  return (
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '2px 22px 14px' }}>
+      {options.map((o) => {
+        const on = value === o.k;
+        return (
+          <button key={String(o.k)} className="press" onClick={() => onChange(o.k)} style={{
+            padding: '7px 13px', borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            border: '1px solid ' + (on ? 'var(--accent)' : 'var(--border-strong)'),
+            background: on ? 'var(--accent-soft)' : 'transparent', color: on ? 'var(--accent)' : 'var(--text-2)',
+          }}>{o.label}</button>
+        );
+      })}
+    </div>
+  );
+}
+
+const D_PUSH_HOURS = [6, 7, 8, 9, 12, 18, 20];
+const D_FREQ_OPTS: { k: 'weekly' | 'few' | 'daily'; label: string }[] = [
+  { k: 'weekly', label: 'Wöchentlich' }, { k: 'few', label: '2–3×/Woche' }, { k: 'daily', label: 'Täglich' },
+];
+const D_FREQ_LABEL: Record<string, string> = { weekly: 'Wöchentlich', few: '2–3× pro Woche', daily: 'Täglich' };
+
 export function DeskSettings({ theme, setTheme, accent, setAccent, me, onLogout, nav }: {
   theme: Theme; setTheme: (t: Theme) => void; accent: string; setAccent: (a: string) => void;
   me: AuthUser | undefined; onLogout: () => void; nav: Nav;
 }) {
   const { data: s } = useSettings();
+  const update = useUpdateSettings();
+  const set = (patch: Parameters<typeof update.mutate>[0]) => update.mutate(patch);
   const tgLink = s?.telegram_bot_username && me ? `https://t.me/${s.telegram_bot_username}?start=${me.id}` : null;
   return (
     <>
@@ -892,8 +930,6 @@ export function DeskSettings({ theme, setTheme, accent, setAccent, me, onLogout,
         <div className="hr" />
 
         <SectionLabel>Benachrichtigungen</SectionLabel>
-        <SetRow icon="bell" title="P1-Signale sofort" sub="Push bei kritischen Signalen"
-          right={<span style={{ color: s?.notify_rank_1 ? 'var(--pos)' : 'var(--text-3)', fontSize: 12.5, fontWeight: 700 }}>{s?.notify_rank_1 ? 'An' : 'Aus'}</span>} />
         {s?.telegram_connected
           ? <SetRow icon="bolt" title="Telegram" sub="Verbunden"
               right={<span style={{ color: 'var(--pos)', fontSize: 12.5, fontWeight: 700 }}>Aktiv</span>} />
@@ -903,9 +939,22 @@ export function DeskSettings({ theme, setTheme, accent, setAccent, me, onLogout,
                 right={<span style={{ color: 'var(--accent)', fontSize: 12.5, fontWeight: 700 }}>Verbinden →</span>} />
             : <SetRow icon="bolt" title="Telegram" sub="Nicht verfügbar"
                 right={<span style={{ color: 'var(--text-3)', fontSize: 12.5, fontWeight: 700 }}>Aus</span>} />}
+
+        <SetRow icon="bell" title="Tagesbriefing" sub={s?.daily_push_enabled ? `1× täglich · ${String(s.daily_push_hour ?? 8).padStart(2, '0')}:00 Uhr · Top 3–5 über alle Keywords` : 'Aus'}
+          right={<DToggle on={!!s?.daily_push_enabled} onChange={(v) => set({ daily_push_enabled: v })} />} />
+        {s?.daily_push_enabled && (
+          <DPills options={D_PUSH_HOURS.map((h) => ({ k: h, label: `${String(h).padStart(2, '0')}:00` }))}
+            value={s?.daily_push_hour ?? 8} onChange={(h) => set({ daily_push_hour: h })} />
+        )}
+        <SetRow icon="flame" title="Breaking-Alerts" sub="Sofort – nur bei marktbewegenden Ereignissen"
+          right={<DToggle on={!!s?.breaking_alerts_enabled} onChange={(v) => set({ breaking_alerts_enabled: v })} />} />
+
+        <SetRow icon="mail" title="Newsletter (E-Mail)" sub={s?.newsletter_enabled ? `${D_FREQ_LABEL[s.newsletter_frequency ?? 'weekly']} · alle Details` : 'Aus'}
+          right={<DToggle on={!!s?.newsletter_enabled} onChange={(v) => set({ newsletter_enabled: v })} />} />
+        {s?.newsletter_enabled && (
+          <DPills options={D_FREQ_OPTS} value={s?.newsletter_frequency ?? 'weekly'} onChange={(f) => set({ newsletter_frequency: f })} />
+        )}
         <SetRow icon="grid" title="Themen-Cluster" sub="Newsletter nach Themen bündeln" right={<Chevron />} onClick={() => nav('clusters')} />
-        <SetRow icon="calendar" title="Wochen-Briefing" sub={s?.newsletter_enabled ? `${s.newsletter_day ?? 'Montag'}, ${s.newsletter_time ?? '07:00'}` : 'Deaktiviert'}
-          right={<span style={{ color: s?.newsletter_enabled ? 'var(--pos)' : 'var(--text-3)', fontSize: 12.5, fontWeight: 700 }}>{s?.newsletter_enabled ? 'An' : 'Aus'}</span>} />
         <div className="hr" />
 
         <SectionLabel>KI &amp; Daten</SectionLabel>

@@ -59,6 +59,7 @@ export interface ClassificationResult {
   tags: string[];           // max 3
   entities: string[];       // named organisations/companies mentioned (max 6)
   signal_type?: SignalType; // nur bei watchType='company'
+  breaking: boolean;        // sehr hohe Hürde: nur marktbewegend/dringend
 }
 
 // ---------- Prompts ----------
@@ -158,6 +159,17 @@ function contextBlock(input: ClassificationInput): string {
   return `${label}: ${input.contextHint.trim()}\n`;
 }
 
+/**
+ * Very high bar for the rare instant "breaking" push. Default false. Only the
+ * kind of event a decision-maker must know within the hour (competitor changes
+ * prices/rates, regulatory decision/deadline, major M&A, outage/scandal). When
+ * in doubt → false. This must stay scarce (a handful per month at most).
+ */
+function breakingRule(lang = 'de'): string {
+  if (lang === 'en') return 'BREAKING: set "breaking": true ONLY for a rare, market-moving, time-critical event a decision-maker must act on within hours (e.g. a competitor changing prices/rates, a regulatory decision/deadline, major M&A, a serious outage/scandal). It must already be rank 1. When in doubt, use false. Keep this extremely rare.';
+  return 'BREAKING: Setze "breaking": true NUR bei einem seltenen, marktbewegenden, zeitkritischen Ereignis, auf das eine Führungskraft binnen Stunden reagieren muss (z. B. Wettbewerber ändert Preise/Zinsen, Regulierungs-Entscheidung/-Frist, größere Übernahme, schwere Störung/Skandal). Es muss bereits Rang 1 sein. Im Zweifel false. Halte das extrem selten.';
+}
+
 const TOPIC_PROMPT = (input: ClassificationInput, opts?: ClassificationOptions) => {
   const lang = input.language || 'de';
   const l = langInstruction(lang);
@@ -176,6 +188,8 @@ ${content}:
 ${input.content.slice(0, 4000)}
 """
 
+${breakingRule(lang)}
+
 ${lang === 'en' ? 'Return JSON in exactly this form' : 'Gib JSON in genau dieser Form zurück'}:
 {
   "rank": 2,
@@ -184,7 +198,8 @@ ${lang === 'en' ? 'Return JSON in exactly this form' : 'Gib JSON in genau dieser
   "summary": "• first point\\n• second point\\n• third point",
   "sentiment": "positive | negative | neutral",
   "tags": ["${l.tag}"],
-  "entities": ["${l.entity}"]
+  "entities": ["${l.entity}"],
+  "breaking": false
 }`;
 };
 
@@ -211,6 +226,8 @@ ${content}:
 ${input.content.slice(0, 4000)}
 """
 
+${breakingRule(lang)}
+
 ${lang === 'en' ? 'Return JSON in exactly this form' : 'Gib JSON in genau dieser Form zurück'}:
 {
   "rank": 2,
@@ -220,7 +237,8 @@ ${lang === 'en' ? 'Return JSON in exactly this form' : 'Gib JSON in genau dieser
   "sentiment": "positive | negative | neutral",
   "tags": ["${l.tag}"],
   "entities": ["${l.entity}"],
-  "signal_type": "partnership"
+  "signal_type": "partnership",
+  "breaking": false
 }`;
 };
 
@@ -376,6 +394,7 @@ export function parseClassificationJson(raw: string, input: ClassificationInput)
     sentiment: 'neutral',
     tags: [],
     entities: [],
+    breaking: false,
     ...(input.watchType === 'company' ? { signal_type: 'general' as SignalType } : {}),
   };
 
@@ -398,6 +417,8 @@ export function parseClassificationJson(raw: string, input: ClassificationInput)
       sentiment: coerceSentiment(obj.sentiment),
       tags: coerceTags(obj.tags),
       entities: coerceEntities(obj.entities),
+      // Only a true rank-1 event can be "breaking"; never let a lesser rank slip through.
+      breaking: obj.breaking === true && coerceRank(obj.rank) === 1,
     };
     if (input.watchType === 'company') {
       result.signal_type = coerceSignal(obj.signal_type) ?? 'general';

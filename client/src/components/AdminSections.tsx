@@ -160,12 +160,12 @@ function TelegramSection() {
           : <div style={{ color: 'var(--rank2)', fontSize: 12.5, marginBottom: 12 }}>Bot-Username nicht konfiguriert (TELEGRAM_BOT_USERNAME).</div>
       )}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0' }}>
-        <span style={{ fontSize: 14, fontWeight: 600 }}>Push bei Rang 1 (kritisch)</span>
-        <Toggle on={!!s?.notify_rank_1} onChange={(v) => update.mutate({ notify_rank_1: v })} />
+        <span style={{ fontSize: 14, fontWeight: 600 }}>Tagesbriefing (1× täglich, Top 3–5)</span>
+        <Toggle on={!!s?.daily_push_enabled} onChange={(v) => update.mutate({ daily_push_enabled: v })} />
       </div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0' }}>
-        <span style={{ fontSize: 14, fontWeight: 600 }}>Push bei Rang 2 (relevant)</span>
-        <Toggle on={!!s?.notify_rank_2} onChange={(v) => update.mutate({ notify_rank_2: v })} />
+        <span style={{ fontSize: 14, fontWeight: 600 }}>Breaking-Alerts (sofort, sehr selten)</span>
+        <Toggle on={!!s?.breaking_alerts_enabled} onChange={(v) => update.mutate({ breaking_alerts_enabled: v })} />
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12, flexWrap: 'wrap' }}>
         <GhostBtn icon="bolt" onClick={() => test.mutate()} disabled={test.isPending || !s?.telegram_connected}>

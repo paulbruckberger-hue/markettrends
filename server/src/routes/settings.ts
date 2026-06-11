@@ -47,6 +47,10 @@ settingsRouter.put('/', async (req: AuthedRequest, res: Response) => {
   if (typeof b.ai_model_variant === 'string') patch.ai_model_variant = b.ai_model_variant;
   if (typeof b.notify_rank_1 === 'boolean') patch.notify_rank_1 = b.notify_rank_1;
   if (typeof b.notify_rank_2 === 'boolean') patch.notify_rank_2 = b.notify_rank_2;
+  if (typeof b.daily_push_enabled === 'boolean') patch.daily_push_enabled = b.daily_push_enabled;
+  if (Number.isInteger(b.daily_push_hour) && b.daily_push_hour >= 0 && b.daily_push_hour <= 23) patch.daily_push_hour = b.daily_push_hour;
+  if (typeof b.breaking_alerts_enabled === 'boolean') patch.breaking_alerts_enabled = b.breaking_alerts_enabled;
+  if (['weekly', 'few', 'daily'].includes(b.newsletter_frequency)) patch.newsletter_frequency = b.newsletter_frequency;
   if (typeof b.newsletter_enabled === 'boolean') patch.newsletter_enabled = b.newsletter_enabled;
   if (typeof b.newsletter_email === 'string') patch.newsletter_email = b.newsletter_email;
   if (typeof b.newsletter_day === 'string') patch.newsletter_day = b.newsletter_day;

@@ -330,8 +330,14 @@ export async function sendDueNewsletters(userId: string, today: string): Promise
     }
   }
 
-  // Combined weekly mail on the user's chosen day.
-  if ((st?.newsletter_day ?? 'monday') === today) {
+  // Combined mail cadence: 'weekly' → chosen day, 'few' → Mon/Wed/Fri, 'daily' → every day.
+  const freq = st?.newsletter_frequency ?? 'weekly';
+  const combinedDue = freq === 'daily'
+    ? true
+    : freq === 'few'
+      ? ['monday', 'wednesday', 'friday'].includes(today)
+      : (st?.newsletter_day ?? 'monday') === today;
+  if (combinedDue) {
     const mail = await buildCombinedMail(userId, ai);
     if (mail) {
       try {

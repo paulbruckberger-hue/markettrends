@@ -134,6 +134,9 @@ export const classifications = pgTable('classifications', {
   // automatic competitor detection + data-driven watch suggestions.
   entities: jsonb('entities').$type<string[]>().default([]),
   signal_type: signalTypeEnum('signal_type'),   // nur bei type='company' gesetzt
+  // Sehr hohe Hürde: nur wirklich marktbewegende/dringende Ereignisse. Treibt
+  // die seltenen Sofort-„Breaking"-Pushes; alles andere wartet aufs Tagesbriefing.
+  breaking: boolean('breaking').notNull().default(false),
 
   ai_model_used: text('ai_model_used'),
   // Version of the ranking prompt that produced this rank. Lets us re-rank
@@ -194,8 +197,17 @@ export const settings = pgTable('settings', {
   notify_rank_1: boolean('notify_rank_1').default(true),
   notify_rank_2: boolean('notify_rank_2').default(false),
 
+  // Tagesbriefing (1×/Tag kuratierter Push statt Sofort-Push pro Artikel) +
+  // seltene Breaking-Sofort-Alerts. Stunde = lokale Versandstunde (Europe/Vienna).
+  daily_push_enabled: boolean('daily_push_enabled').notNull().default(true),
+  daily_push_hour: integer('daily_push_hour').notNull().default(8),
+  daily_push_last_sent: timestamp('daily_push_last_sent'),
+  breaking_alerts_enabled: boolean('breaking_alerts_enabled').notNull().default(true),
+
   newsletter_email: text('newsletter_email'),
   newsletter_enabled: boolean('newsletter_enabled').default(false),
+  // 'weekly' = an newsletter_day, 'few' = Mo/Mi/Fr, 'daily' = täglich
+  newsletter_frequency: text('newsletter_frequency').notNull().default('weekly'),
   newsletter_day: text('newsletter_day').default('monday'),
   newsletter_time: text('newsletter_time').default('07:00'),
   newsletter_last_sent: timestamp('newsletter_last_sent'),

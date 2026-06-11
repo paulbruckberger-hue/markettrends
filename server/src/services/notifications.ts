@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, sql } from 'drizzle-orm';
+import { and, eq, gte, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { articles, classifications, settings, user_article_state, watch_items } from '../db/schema';
 import { InlineKeyboard, sendTelegramMessage, telegramEnabled } from './telegram';
@@ -14,6 +14,7 @@ interface NotifClassification {
   summary: string;
   source_url: string;
   source_name: string | null;
+  breaking?: boolean;
 }
 
 /**
@@ -35,11 +36,11 @@ export function buildPushKeyboard(classificationId: string, chosen?: 'up' | 'dow
 }
 
 function buildMessage(c: NotifClassification, watchName: string): string {
-  const emoji = c.rank === 1 ? '🔴' : '🟠';
+  const head = c.breaking ? '⚡ <b>BREAKING</b>' : (c.rank === 1 ? '🔴' : '🟠');
   const first = (c.summary || '').split('\n')[0].replace(/^[•\-*]\s*/, '').trim();
   return [
-    `${emoji} <b>${esc(c.title)}</b>`,
-    `<i>${esc(watchName)} · Rang ${c.rank}</i>`,
+    `${head} <b>${esc(c.title)}</b>`,
+    `<i>${esc(watchName)}${c.breaking ? '' : ` · Rang ${c.rank}`}</i>`,
     first ? esc(first) : '',
     '',
     `<a href="${c.source_url}">→ Quelle${c.source_name ? ` (${esc(c.source_name)})` : ''}</a>`,
@@ -47,12 +48,13 @@ function buildMessage(c: NotifClassification, watchName: string): string {
 }
 
 /**
- * Telegram fan-out for a single term: every active subscriber gets pushes for
- * new rank 1/2 classifications according to their own settings. Suche/Klassi-
- * fikation lief nur einmal; hier verteilen wir pro User. telegram_sent verhindert
- * Doppel-Push. Never throws — a failed send is logged and skipped.
+ * Instant Telegram push for a term — ONLY for rare "breaking" items, and only to
+ * subscribers who kept breaking alerts on. Everything else (normal rank 1/2) is
+ * NOT pushed per-article anymore; it is bundled into the once-daily briefing.
+ * telegram_sent dedups against both the breaking push and the daily briefing.
+ * Never throws — a failed send is logged and skipped.
  */
-export async function fanOutForTerm(searchTermId: string): Promise<number> {
+export async function fanOutBreaking(searchTermId: string): Promise<number> {
   if (!telegramEnabled()) return 0;
 
   const cls = await db.select({
@@ -67,7 +69,7 @@ export async function fanOutForTerm(searchTermId: string): Promise<number> {
     .innerJoin(articles, eq(articles.id, classifications.article_id))
     .where(and(
       eq(classifications.search_term_id, searchTermId),
-      inArray(classifications.rank, [1, 2]),
+      eq(classifications.breaking, true),
       gte(classifications.created_at, sql`now() - interval '2 days'`),
     ));
   if (cls.length === 0) return 0;
@@ -79,19 +81,16 @@ export async function fanOutForTerm(searchTermId: string): Promise<number> {
   let sent = 0;
   for (const sub of subs) {
     const [st] = await db.select().from(settings).where(eq(settings.user_id, sub.user_id));
-    if (!st || !st.telegram_connected || !st.telegram_chat_id) continue;
+    if (!st || !st.telegram_connected || !st.telegram_chat_id || !st.breaking_alerts_enabled) continue;
 
     for (const c of cls) {
-      const want = c.rank === 1 ? st.notify_rank_1 : st.notify_rank_2;
-      if (!want) continue;
-
       const [state] = await db.select({ telegram_sent: user_article_state.telegram_sent })
         .from(user_article_state)
         .where(and(eq(user_article_state.user_id, sub.user_id), eq(user_article_state.classification_id, c.id)));
       if (state?.telegram_sent) continue;
 
       try {
-        await sendTelegramMessage(st.telegram_chat_id, buildMessage(c, sub.display_name), buildPushKeyboard(c.id));
+        await sendTelegramMessage(st.telegram_chat_id, buildMessage({ ...c, breaking: true }, sub.display_name), buildPushKeyboard(c.id));
         await db.insert(user_article_state).values({
           user_id: sub.user_id,
           classification_id: c.id,
@@ -103,10 +102,10 @@ export async function fanOutForTerm(searchTermId: string): Promise<number> {
         });
         sent++;
       } catch (err) {
-        console.error('[notify] send failed:', err instanceof Error ? err.message : err);
+        console.error('[notify] breaking send failed:', err instanceof Error ? err.message : err);
       }
     }
   }
-  if (sent > 0) console.log(`[notify] term ${searchTermId}: ${sent} Telegram-Pushes gesendet`);
+  if (sent > 0) console.log(`[notify] term ${searchTermId}: ${sent} Breaking-Pushes gesendet`);
   return sent;
 }
