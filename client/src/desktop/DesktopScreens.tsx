@@ -507,8 +507,10 @@ export function DeskCompetitor({ id, actions, nav, back, onCompose, flash }: {
   id: string; actions: ItemActions; nav: Nav; back: () => void; onCompose: () => void; flash: (m: string) => void;
 }) {
   const [tab, setTab] = useState<'overview' | 'rivals' | 'moves'>('overview');
+  const [sentFilter, setSentFilter] = useState<'positive' | 'neutral' | 'negative' | null>(null);
   const { data: d, isLoading } = useCompetitor(id);
   const { data: feedData } = useFeed({ watch_item_id: id });
+  const sentFeed = useFeed({ watch_item_id: id, sentiment: sentFilter ?? undefined }, { enabled: !!sentFilter });
   const run = useRunWatch();
   const del = useDeleteWatch();
   const onDelete = () => {
@@ -524,6 +526,7 @@ export function DeskCompetitor({ id, actions, nav, back, onCompose, flash }: {
   const maxShare = Math.max(...d.sov.map((s) => s.share), 1);
   const sigMax = Math.max(...d.signals.map((s) => s.n), 1);
   const sentTotal = d.sentiment.positive + d.sentiment.neutral + d.sentiment.negative || 1;
+  const SENT_LABEL: Record<'positive' | 'neutral' | 'negative', string> = { positive: 'Positive', neutral: 'Neutrale', negative: 'Negative' };
   const moves = flattenFeed(feedData).map(toDisplayItem);
   const sovColor = (i: number, c: string | null) => c || PALETTE[i % PALETTE.length];
 
@@ -591,23 +594,56 @@ export function DeskCompetitor({ id, actions, nav, back, onCompose, flash }: {
                   </div>
                 </Panel>
               )}
-              <Panel title="Marktstimmung">
+              <Panel title="Marktstimmung" action={<span style={{ fontSize: 11.5, color: 'var(--text-3)' }}>klicken zum Anzeigen</span>}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                   <Donut size={104} thickness={18} segments={[
                     { value: d.sentiment.positive, color: 'var(--pos)' }, { value: d.sentiment.neutral, color: 'var(--neu)' }, { value: d.sentiment.negative, color: 'var(--neg)' },
                   ]} center={<><span className="tabular" style={{ fontSize: 20, fontWeight: 800, color: 'var(--pos)' }}>{Math.round(d.sentiment.positive / sentTotal * 100)}%</span><span style={{ fontSize: 10, color: 'var(--text-3)' }}>positiv</span></>} />
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 9 }}>
-                    {([['Positiv', d.sentiment.positive, 'var(--pos)'], ['Neutral', d.sentiment.neutral, 'var(--neu)'], ['Negativ', d.sentiment.negative, 'var(--neg)']] as const).map(([l, n, c]) => (
-                      <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ width: 10, height: 10, borderRadius: 3, background: c }} />
-                        <span style={{ flex: 1, fontSize: 13, color: 'var(--text-2)' }}>{l}</span>
-                        <span className="tabular" style={{ fontWeight: 700, fontSize: 13 }}>{Math.round(n / sentTotal * 100)}%</span>
-                      </div>
-                    ))}
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    {([['Positiv', d.sentiment.positive, 'var(--pos)', 'positive'], ['Neutral', d.sentiment.neutral, 'var(--neu)', 'neutral'], ['Negativ', d.sentiment.negative, 'var(--neg)', 'negative']] as const).map(([l, n, c, key]) => {
+                      const active = sentFilter === key;
+                      return (
+                        <button key={l} className="press" onClick={() => setSentFilter(active ? null : key)}
+                          style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', cursor: 'pointer', borderRadius: 9, padding: '6px 8px', border: '1px solid ' + (active ? c : 'transparent'), background: active ? `color-mix(in srgb, ${c} 13%, transparent)` : 'transparent' }}>
+                          <span style={{ width: 10, height: 10, borderRadius: 3, background: c }} />
+                          <span style={{ flex: 1, fontSize: 13, color: 'var(--text-2)' }}>{l}</span>
+                          <span className="tabular" style={{ fontWeight: 800, fontSize: 13 }}>{n}</span>
+                          <span className="tabular" style={{ fontSize: 11.5, color: 'var(--text-3)', width: 36, textAlign: 'right' }}>{Math.round(n / sentTotal * 100)}%</span>
+                          <Icon name="chevron" size={15} style={{ color: active ? c : 'var(--text-3)' }} />
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               </Panel>
             </div>
+
+            {sentFilter && (() => {
+              const list = flattenFeed(sentFeed.data).map(toDisplayItem);
+              return (
+                <Panel title={`${SENT_LABEL[sentFilter]} Nachrichten`} action={
+                  <button className="press" onClick={() => setSentFilter(null)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'transparent', border: 'none', color: 'var(--text-3)', fontSize: 12.5, cursor: 'pointer' }}>
+                    <Icon name="close" size={14} /> Schließen
+                  </button>
+                }>
+                  {sentFeed.isLoading ? (
+                    <div style={{ display: 'flex', justifyContent: 'center', padding: '18px 0' }}><Spinner /></div>
+                  ) : list.length ? (
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      {list.map((it) => <FeedCard key={it.id} item={it} variant="standard" on={actions} onOpen={(x) => nav('detail', { item: x })} />)}
+                      {sentFeed.hasNextPage && (
+                        <button className="press" onClick={() => sentFeed.fetchNextPage()} disabled={sentFeed.isFetchingNextPage}
+                          style={{ marginTop: 10, padding: '9px 0', borderRadius: 999, border: '1px solid var(--border-strong)', background: 'transparent', color: 'var(--accent)', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                          {sentFeed.isFetchingNextPage ? 'Lädt …' : 'Mehr laden'}
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ color: 'var(--text-3)', fontSize: 13 }}>Keine {SENT_LABEL[sentFilter].toLowerCase()} Nachrichten für diese Beobachtung.</div>
+                  )}
+                </Panel>
+              );
+            })()}
 
             {d.signals.length > 0 && (
               <Panel title="Signal-Mix">

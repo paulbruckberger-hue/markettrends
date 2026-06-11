@@ -66,6 +66,8 @@ articlesRouter.get('/', async (req: AuthedRequest, res: Response) => {
   const sort = req.query.sort === 'latest' ? 'latest' : 'top';
   const bookmarkedOnly = req.query.bookmarked === '1' || req.query.bookmarked === 'true';
   const feedback = req.query.feedback === 'up' || req.query.feedback === 'down' ? req.query.feedback : undefined;
+  const sentiment = req.query.sentiment === 'positive' || req.query.sentiment === 'neutral' || req.query.sentiment === 'negative'
+    ? req.query.sentiment : undefined;
   const cutoff = periodCutoff(req.query.period);
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
@@ -79,6 +81,7 @@ articlesRouter.get('/', async (req: AuthedRequest, res: Response) => {
   }
   if (bookmarkedOnly) conditions.push(eq(user_article_state.is_bookmarked, true));
   if (feedback) conditions.push(eq(user_article_state.user_feedback, feedback));
+  if (sentiment) conditions.push(eq(classifications.sentiment, sentiment));
   if (cutoff) conditions.push(gte(articles.published_at, cutoff));
   if (search) {
     // Full-content search across every article in the user's feed: the German

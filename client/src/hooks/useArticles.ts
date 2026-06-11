@@ -11,6 +11,7 @@ export interface FeedFilters {
   sort?: 'top' | 'latest';
   bookmarked?: boolean;
   feedback?: 'up' | 'down';
+  sentiment?: 'positive' | 'neutral' | 'negative';
 }
 
 function cleanParams(filters: FeedFilters): Record<string, string | number> {
@@ -23,12 +24,14 @@ function cleanParams(filters: FeedFilters): Record<string, string | number> {
   if (filters.sort) out.sort = filters.sort;
   if (filters.bookmarked) out.bookmarked = '1';
   if (filters.feedback) out.feedback = filters.feedback;
+  if (filters.sentiment) out.sentiment = filters.sentiment;
   return out;
 }
 
-export function useFeed(filters: FeedFilters) {
+export function useFeed(filters: FeedFilters, opts?: { enabled?: boolean }) {
   return useInfiniteQuery({
     queryKey: ['feed', filters],
+    enabled: opts?.enabled ?? true,
     initialPageParam: 1,
     queryFn: async ({ pageParam }) => {
       const params = { ...cleanParams(filters), page: pageParam, limit: 20 };
