@@ -163,7 +163,9 @@ export async function sendDailyBriefing(userId: string): Promise<number> {
 
   if (chosen.length > 0) {
     const date = new Date().toLocaleDateString('de-AT', { day: '2-digit', month: '2-digit' });
-    const keyboard = config.clientUrl
+    // Only attach the deep-link button for a real public URL — Telegram rejects
+    // localhost, and a bad button URL would otherwise fail the whole message.
+    const keyboard = /^https:\/\//.test(config.clientUrl)
       ? { inline_keyboard: [[{ text: '📲 Alle Meldungen im Feed', url: `${config.clientUrl}/feed` }]] }
       : undefined;
     await sendTelegramMessage(st.telegram_chat_id, buildMessage(date, lage, chosen), keyboard);
