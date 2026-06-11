@@ -7,8 +7,8 @@
 - **GCP-Projekt:** `gen-lang-client-0439364318` ("Default Gemini Project"), Region `europe-west1`.
   Getrennt vom Bank-App-Projekt. Billing aktiv.
 - **Cloud Run Service** `markttrends-api` – serviert API **und** das React-Frontend (eine URL).
-- **Cloud Run Jobs** `markttrends-collector`, `markttrends-newsletter`.
-- **Cloud Scheduler** `markttrends-collect` (alle 6h), `markttrends-newsletter` (täglich 05:00 Europe/Vienna).
+- **Cloud Run Jobs** `markttrends-collector`, `markttrends-newsletter`, `markttrends-digest` (alle mit `CLIENT_URL` gesetzt — nötig für Links/Buttons!).
+- **Cloud Scheduler** `markttrends-collect` (alle 6h), `markttrends-newsletter` (täglich 05:00), `markttrends-digest` (**stündlich**, sendet Tagesbriefing zur jeweiligen User-Stunde) — alle Europe/Vienna.
 - **Secrets:** DATABASE_URL, JWT_SECRET, ANTHROPIC_API_KEY, TELEGRAM_WEBHOOK_SECRET,
   **TELEGRAM_BOT_TOKEN, APIFY_API_TOKEN, GEMINI_API_KEY, DEEPSEEK_API_KEY, SMTP_PASS** (alle gesetzt & live).
 - **Telegram:** Bot **@Nicheletterbot** live — Token + `TELEGRAM_BOT_USERNAME=Nicheletterbot` gesetzt (API + Collector),
@@ -16,6 +16,7 @@
 - **SMTP:** smtp.gmail.com:587, User: noreplymarkettrendsnews@gmail.com (App-Passwort gesetzt).
 - **Feedback-Modul:** Rang-Override im Feed live — RankBadge klickbar, Popover [1][2][3][↺].
 - **Telegram-Pushes mit Buttons** (rev 00030): „Mehr Infos" + 👍/👎-Relevanz-Feedback (callback_query → user_article_state.user_feedback → personalizeRank).
+- **Anti-Spam: Tagesbriefing + Breaking** (rev 00035, Migration 0012): Sofort-Push pro Artikel ABGESCHALTET. Stattdessen 1×/Tag (User-Stunde, Europe/Vienna) kuratiertes Tagesbriefing — zweite Gemini-Editorial-Runde über alle 24h-Kandidaten ALLER Keywords, cross-keyword dedupliziert, adaptiv 0–5. Neue `breaking`-Stufe (sehr hohe Hürde) → nur die brechen sofort durch (`fanOutBreaking`). Newsletter-Takt wählbar (wöchentlich/2–3×Woche/täglich). Job `markttrends-digest` stündlich. Auf Prod getestet: 5 kuratierte Meldungen an paul gesendet, idempotent. ⚠️ Jobs brauchen `CLIENT_URL` (sonst localhost-Button → Telegram-Fehler).
 - **1-Klick-Feedback in der Newsletter-Mail** (rev 00033): jeder Artikel hat 👍/👎-Links → Bestätigungsseite `/feedback` (JS-POST, scanner-sicher) → `/api/feedback/email` mit signiertem HMAC-Token (lib/emailToken.ts, JWT_SECRET) → gleiche Spalte + gleiches Sofort-Lernen. Vierter Feedback-Kanal neben App/Telegram, alle einheitlich.
 - **Sofort-Lernen aus Feedback** (rev 00032): jedes 👍/👎 (in-app ODER Telegram) löst sofort `repersonalizeUserTerm()` aus → die Artikel des Users zum Keyword werden direkt neu personalisiert (kein manuelles „Reranking" mehr nötig; der Knopf ist nur noch für Altbestand/Prompt-Upgrades). Webhook antwortet jetzt erst NACH Verarbeitung (Cloud Run throttelt CPU nach Response).
 - **Newsletter-Themen-Cluster** (rev 00031, Migration 0011): Einstellungen → Themen-Cluster. Hybrid-Versand — eine Sammelmail mit Abschnitt je Cluster ('combined') + separate Cluster-Mails mit eigenem Rhythmus ('separate', weekly/daily). KI-Vorschlag (/api/clusters/suggest) gruppiert Keywords. Newsletter-Job läuft jetzt täglich für alle Empfänger.
