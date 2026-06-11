@@ -1,9 +1,16 @@
 import { and, desc, eq, inArray, isNotNull, ne, sql } from 'drizzle-orm';
 import { db } from '../db/client';
-import { articles, classifications, search_terms, settings, user_article_state, users, watch_items } from '../db/schema';
 import {
-  AiModel, FewShotExample, personalizeRank, RelevanceExample,
+  articles, classifications, search_terms, settings,
+  user_article_state, user_content_profiles, users, watch_items,
+} from '../db/schema';
+import {
+  AiModel, FewShotExample, personalizeRank, ProfileFeedbackItem,
+  RelevanceExample, summarizeContentProfile,
 } from './ai/classifier';
+
+/** Below this many 👍/👎 a global content profile isn't meaningful — clear it. */
+const PROFILE_MIN_FEEDBACK = 2;
 
 /**
  * Determine which AI model/variant/language to use for the (shared) base
@@ -97,6 +104,78 @@ export async function loadUserCorrections(userId: string, searchTermId: string, 
   } catch { return []; }
 }
 
+// ---------- Global content profile (keyword-übergreifend) ----------
+
+/**
+ * ALL of a user's 👍/👎 across ALL keywords (newest first), each tagged with the
+ * keyword it was rated under. This is the raw material for the global content
+ * profile — unlike loadUserFeedback it is deliberately NOT term-scoped, so the
+ * AI can learn what CONTENT the reader values regardless of keyword.
+ */
+export async function loadAllUserFeedback(userId: string, limit = 40): Promise<ProfileFeedbackItem[]> {
+  try {
+    const rows = await db
+      .select({
+        keyword: search_terms.query_display,
+        feedback: user_article_state.user_feedback,
+        content: sql<string>`COALESCE(${articles.original_title}, '') || ' ' || COALESCE(${articles.raw_excerpt}, '')`,
+      })
+      .from(user_article_state)
+      .innerJoin(classifications, eq(classifications.id, user_article_state.classification_id))
+      .innerJoin(search_terms, eq(search_terms.id, classifications.search_term_id))
+      .innerJoin(articles, eq(articles.id, classifications.article_id))
+      .where(and(eq(user_article_state.user_id, userId), isNotNull(user_article_state.user_feedback)))
+      .orderBy(desc(user_article_state.updated_at))
+      .limit(limit);
+    return rows
+      .filter((r): r is { keyword: string; feedback: 'up' | 'down'; content: string } => r.feedback === 'up' || r.feedback === 'down')
+      .map((r) => ({ keyword: r.keyword, feedback: r.feedback, content: r.content.trim().replace(/\s+/g, ' ').slice(0, 160) }));
+  } catch { return []; }
+}
+
+/** The stored global content profile for a user, or null if none/blank. */
+export async function loadContentProfile(userId: string): Promise<string | null> {
+  try {
+    const [row] = await db.select({ profile: user_content_profiles.profile })
+      .from(user_content_profiles).where(eq(user_content_profiles.user_id, userId));
+    return row?.profile?.trim() ? row.profile.trim() : null;
+  } catch { return null; }
+}
+
+/**
+ * Re-distil & persist the user's GLOBAL content profile from all their 👍/👎
+ * across every keyword. Called right after a user votes, so the very next
+ * ranking (this term now, other terms on their next collection/rerank) reflects
+ * it. Below PROFILE_MIN_FEEDBACK signals the profile is cleared (feed falls back
+ * to term-scoped feedback + base rank). Never throws — on failure the previous
+ * profile is kept. Returns the current profile text (or null).
+ */
+export async function rebuildContentProfile(userId: string): Promise<string | null> {
+  const items = await loadAllUserFeedback(userId);
+  if (items.length < PROFILE_MIN_FEEDBACK) {
+    await db.delete(user_content_profiles).where(eq(user_content_profiles.user_id, userId));
+    return null;
+  }
+  const ai = await getActiveAiConfig();
+  let profile: string;
+  try {
+    profile = await summarizeContentProfile(items, ai.model, ai.variant, ai.language);
+  } catch (err) {
+    console.error('[content-profile] build failed for', userId, err instanceof Error ? err.message : err);
+    return loadContentProfile(userId); // keep whatever we had
+  }
+  if (!profile.trim()) return loadContentProfile(userId);
+
+  await db.insert(user_content_profiles).values({
+    user_id: userId, profile, feedback_count: items.length, built_at: new Date(), updated_at: new Date(),
+  }).onConflictDoUpdate({
+    target: user_content_profiles.user_id,
+    set: { profile, feedback_count: items.length, built_at: new Date(), updated_at: new Date() },
+  });
+  console.log(`[content-profile] user ${userId}: Profil aus ${items.length} Bewertungen aktualisiert`);
+  return profile;
+}
+
 /**
  * Immediate, automatic learning: right after a user gives feedback (in-app OR
  * Telegram) on a term, re-rank that user's recent articles for the SAME term
@@ -105,10 +184,22 @@ export async function loadUserCorrections(userId: string, searchTermId: string, 
  * If the user has no remaining signal for the term, personalisation is cleared
  * (the feed falls back to the shared base rank). Returns rows touched.
  */
-export async function repersonalizeUserTerm(userId: string, searchTermId: string, limit = 15): Promise<number> {
+export async function repersonalizeUserTerm(
+  userId: string,
+  searchTermId: string,
+  limit = 15,
+  opts?: { skipProfileRebuild?: boolean },
+): Promise<number> {
   const [term] = await db.select({ query: search_terms.query_display, type: search_terms.type })
     .from(search_terms).where(eq(search_terms.id, searchTermId));
   if (!term) return 0;
+
+  // Refresh the GLOBAL, keyword-übergreifende Profil first, so this very vote
+  // also teaches the AI which CONTENT matters — not just this keyword. Bulk
+  // re-apply passes skipProfileRebuild (profiles are seeded once up front).
+  const profile = opts?.skipProfileRebuild
+    ? await loadContentProfile(userId)
+    : await rebuildContentProfile(userId);
 
   const [feedback, corrections] = await Promise.all([
     loadUserFeedback(userId, searchTermId),
@@ -126,10 +217,11 @@ export async function repersonalizeUserTerm(userId: string, searchTermId: string
     .innerJoin(articles, eq(articles.id, classifications.article_id))
     .where(eq(classifications.search_term_id, searchTermId))
     .orderBy(desc(classifications.created_at))
-    .limit(Math.min(40, limit));
+    .limit(Math.min(200, limit));
 
-  // No signal left for this term → clear any personalisation so the feed resets.
-  if (feedback.length === 0 && corrections.length === 0) {
+  // No signal left at all (term feedback AND global profile) → clear any
+  // personalisation so the feed resets to the shared base rank.
+  if (feedback.length === 0 && corrections.length === 0 && !profile) {
     const ids = rows.map((r) => r.id);
     if (ids.length) {
       await db.update(user_article_state)
@@ -150,7 +242,7 @@ export async function repersonalizeUserTerm(userId: string, searchTermId: string
         const { rank, rank_reason } = await personalizeRank(
           { content, searchQuery: term.query, watchType, baseRank: r.baseRank, language: ai.language },
           ai.model, ai.variant,
-          { relevanceFeedback: feedback, fewShotExamples: corrections },
+          { relevanceFeedback: feedback, fewShotExamples: corrections, contentProfile: profile ?? undefined },
         );
         await db.insert(user_article_state).values({
           user_id: userId, classification_id: r.id,
@@ -183,11 +275,26 @@ export interface PersonalizeContext {
    * keyword, so learning on one term never bleeds into another.
    */
   cache: Map<string, UserSignals>;
+  /**
+   * Caches each user's GLOBAL content profile (keyword-übergreifend) so we load
+   * it once per run. Key is `${userId}`. Unlike `cache`, this signal applies to
+   * every term — it's how content (not just the keyword) drives the ranking.
+   */
+  profileCache: Map<string, string | null>;
 }
 
 export async function makePersonalizeContext(): Promise<PersonalizeContext> {
   const ai = await getActiveAiConfig();
-  return { model: ai.model, variant: ai.variant, language: ai.language, cache: new Map() };
+  return { model: ai.model, variant: ai.variant, language: ai.language, cache: new Map(), profileCache: new Map() };
+}
+
+/** One user's global content profile, loaded once per run and cached. */
+async function userProfile(userId: string, ctx: PersonalizeContext): Promise<string | null> {
+  const hit = ctx.profileCache.get(userId);
+  if (hit !== undefined) return hit;
+  const p = await loadContentProfile(userId);
+  ctx.profileCache.set(userId, p);
+  return p;
 }
 
 async function userSignals(userId: string, searchTermId: string, ctx: PersonalizeContext): Promise<UserSignals> {
@@ -227,12 +334,16 @@ export async function personalizeClassification(params: {
   let personalised = 0;
   for (const sub of subs) {
     const sig = await userSignals(sub.user_id, params.searchTermId, ctx);
-    if (!sig.hasAny) continue;
+    const profile = await userProfile(sub.user_id, ctx);
+    // Personalise if the user has term-specific feedback OR a global content
+    // profile — the latter lets a 👍 on keyword A lift similar content under
+    // keyword B, even with no feedback on B.
+    if (!sig.hasAny && !profile) continue;
     try {
       const { rank, rank_reason } = await personalizeRank(
         { content: params.content, searchQuery: params.searchQuery, watchType: params.watchType, baseRank: params.baseRank, language: ctx.language },
         ctx.model, ctx.variant,
-        { relevanceFeedback: sig.feedback, fewShotExamples: sig.corrections },
+        { relevanceFeedback: sig.feedback, fewShotExamples: sig.corrections, contentProfile: profile ?? undefined },
       );
       await db.insert(user_article_state).values({
         user_id: sub.user_id,

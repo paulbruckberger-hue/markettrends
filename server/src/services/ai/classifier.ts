@@ -41,6 +41,13 @@ export interface RelevanceExample {
   feedback: 'up' | 'down';    // 👍 more like this | 👎 less like this
 }
 
+/** One 👍/👎 used to distil a user's GLOBAL, keyword-übergreifendes Interessenprofil. */
+export interface ProfileFeedbackItem {
+  keyword: string;            // which search term this was rated under (context only)
+  feedback: 'up' | 'down';
+  content: string;            // title + excerpt (truncated)
+}
+
 export interface ClassificationOptions {
   /** Custom rank criteria from app_config. Falls back to hardcoded defaults. */
   rankCriteria?: RankCriteria;
@@ -151,6 +158,19 @@ function relevanceBlock(examples: RelevanceExample[] | undefined, lang = 'de'): 
   return `\n${intro}\n${parts.join('\n')}\n`;
 }
 
+/**
+ * The reader's GLOBAL interest profile — distilled across ALL their keywords, so
+ * 👍/👎 teaches the AI which CONTENT matters, not just which keyword. Injected
+ * into per-user personalisation alongside the term-specific 👍/👎.
+ */
+function profileBlock(profile: string | undefined, lang = 'de'): string {
+  if (!profile?.trim()) return '';
+  const intro = lang === 'en'
+    ? 'GLOBAL INTEREST PROFILE of this reader (learned across ALL their keywords from past feedback) — apply it as a content signal:'
+    : 'GLOBALES INTERESSENPROFIL dieser Leser:in (keyword-übergreifend aus früherem Feedback gelernt) — als inhaltliches Signal anwenden:';
+  return `\n${intro}\n"""\n${profile.trim()}\n"""\n`;
+}
+
 function contextBlock(input: ClassificationInput): string {
   if (!input.contextHint?.trim()) return '';
   const label = (input.language || 'de') === 'en'
@@ -257,25 +277,30 @@ export interface PersonalizeInput {
 }
 
 export interface PersonalizeOptions {
-  /** This user's 👍/👎 relevance feedback. */
+  /** This user's 👍/👎 relevance feedback (term-scoped). */
   relevanceFeedback?: RelevanceExample[];
-  /** This user's own rank corrections. */
+  /** This user's own rank corrections (term-scoped). */
   fewShotExamples?: FewShotExample[];
+  /** This user's GLOBAL content interest profile (keyword-übergreifend). */
+  contentProfile?: string;
 }
 
 function buildPersonalizePrompt(input: PersonalizeInput, opts: PersonalizeOptions): string {
   const lang = input.language || 'de';
+  const prof = profileBlock(opts.contentProfile, lang);
   const fb = relevanceBlock(opts.relevanceFeedback, lang);
   const corr = fewShotBlock(opts.fewShotExamples, lang);
   if (lang === 'en') {
     return `You personalise the relevance rank for ONE specific reader. The objective base rank of this signal is ${input.baseRank} (1 = critical, 2 = relevant, 3 = noise).
 
 Adjust the rank FOR THIS READER based on their preferences below:
+- Content that matches the global interest profile → better (lower number); content that clearly contradicts it → weaker (higher number).
 - Content similar to the 👍 examples → better (lower number).
 - Content similar to the 👎 examples → weaker (higher number).
+- Judge by CONTENT and substance, not by the keyword — the profile reflects what the reader values across all their topics.
 - Shift by at most one step, and only when the preferences clearly justify it — otherwise keep the base rank.
 - Off-topic content stays rank 3 (the relevance gate still applies).
-${fb}${corr}
+${prof}${fb}${corr}
 Observed term: "${input.searchQuery}"
 Content:
 """
@@ -288,11 +313,13 @@ Reply with ONE JSON object only, no Markdown, no extra text:
   return `Du personalisierst die Relevanz-Einstufung für EINE bestimmte Leser:in. Der objektive Basis-Rang dieses Signals ist ${input.baseRank} (1 = kritisch, 2 = relevant, 3 = Rauschen).
 
 Passe den Rang FÜR DIESE LESER:IN anhand ihrer Präferenzen unten an:
+- Inhalte, die zum globalen Interessenprofil passen → besser (niedrigerer Rang); Inhalte, die ihm klar widersprechen → schwächer (höherer Rang).
 - Inhalte ähnlich den 👍-Beispielen → besser (niedrigerer Rang).
 - Inhalte ähnlich den 👎-Beispielen → schwächer (höherer Rang).
+- Bewerte nach INHALT und Substanz, nicht nach dem Keyword — das Profil spiegelt, was die Leser:in über alle Themen hinweg schätzt.
 - Verschiebe höchstens um eine Stufe und nur, wenn die Präferenzen es klar rechtfertigen — sonst behalte den Basis-Rang.
 - Themenfremde Inhalte bleiben Rang 3 (der Relevanzfilter gilt weiter).
-${fb}${corr}
+${prof}${fb}${corr}
 Beobachtungsbegriff: "${input.searchQuery}"
 Inhalt:
 """
@@ -333,7 +360,9 @@ export async function personalizeRank(
   variant: string | undefined,
   opts: PersonalizeOptions,
 ): Promise<{ rank: 1 | 2 | 3; rank_reason: string }> {
-  const hasSignal = (opts.relevanceFeedback?.length ?? 0) > 0 || (opts.fewShotExamples?.length ?? 0) > 0;
+  const hasSignal = (opts.relevanceFeedback?.length ?? 0) > 0
+    || (opts.fewShotExamples?.length ?? 0) > 0
+    || !!opts.contentProfile?.trim();
   if (!hasSignal) return { rank: coerceRank(input.baseRank), rank_reason: '' };
 
   const prompt = buildPersonalizePrompt(input, opts);
@@ -345,6 +374,65 @@ export async function personalizeRank(
     default: throw new Error(`AI model '${model}' is not implemented`);
   }
   return parsePersonalizeJson(raw, input.baseRank);
+}
+
+// ---------- Global content profile (keyword-übergreifend) ----------
+
+function buildProfilePrompt(items: ProfileFeedbackItem[], lang = 'de'): string {
+  const up = items.filter((i) => i.feedback === 'up');
+  const down = items.filter((i) => i.feedback === 'down');
+  const fmt = (arr: ProfileFeedbackItem[]) =>
+    arr.map((i, n) => `  ${n + 1}. [${i.keyword}] "${i.content.replace(/\s+/g, ' ').slice(0, 160)}"`).join('\n');
+  if (lang === 'en') {
+    return `You distil ONE reader's content interests for a market-intelligence system.
+Below is content this reader rated relevant (👍) or irrelevant (👎) across DIFFERENT topics/keywords.
+Infer WHAT CONTENT genuinely interests this reader — keyword-independent. Look for recurring patterns in substance, angle and concreteness, NOT the individual keywords.
+
+👍 Found relevant:
+${up.length ? fmt(up) : '  (none)'}
+👎 Found irrelevant:
+${down.length ? fmt(down) : '  (none)'}
+
+Answer with 3–6 short bullet points in EXACTLY this shape (no preamble, no JSON):
+INTERESTED IN:
+- <concrete content pattern>
+- <…>
+LESS INTERESTED IN:
+- <…>
+Keep it concrete and content-focused. Invent nothing the examples don't support.`;
+  }
+  return `Du verdichtest die inhaltlichen Interessen EINER Leser:in für ein Markt-Intelligence-System.
+Unten stehen Inhalte, die die Leser:in über VERSCHIEDENE Themen/Keywords hinweg als relevant (👍) oder irrelevant (👎) bewertet hat.
+Leite ab, WELCHE INHALTE diese Leser:in wirklich interessieren — keyword-unabhängig. Achte auf wiederkehrende Muster in Substanz, Blickwinkel und Konkretheit, NICHT auf die einzelnen Keywords.
+
+👍 Relevant fand sie:
+${up.length ? fmt(up) : '  (keine)'}
+👎 Irrelevant fand sie:
+${down.length ? fmt(down) : '  (keine)'}
+
+Antworte mit 3–6 kurzen Stichpunkten in GENAU dieser Form (kein Vorspann, kein JSON):
+INTERESSIERT AN:
+- <konkretes inhaltliches Muster>
+- <…>
+WENIGER INTERESSIERT AN:
+- <…>
+Halte es konkret und inhaltlich. Erfinde nichts, was die Beispiele nicht stützen.`;
+}
+
+/**
+ * Distil a reader's GLOBAL content interests from their 👍/👎 across all
+ * keywords into a compact natural-language profile. Returns '' when there's
+ * nothing to summarise. Throws only if the provider call fails.
+ */
+export async function summarizeContentProfile(
+  items: ProfileFeedbackItem[],
+  model: AiModel,
+  variant: string | undefined,
+  lang = 'de',
+): Promise<string> {
+  if (items.length === 0) return '';
+  const raw = await generateText(buildProfilePrompt(items, lang), model, variant);
+  return raw.trim().replace(/^```(?:\w+)?/i, '').replace(/```$/i, '').trim().slice(0, 1200);
 }
 
 // ---------- Robust parsing (never throws) ----------

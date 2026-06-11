@@ -92,6 +92,13 @@
       "when": 1781122372713,
       "tag": "0012_daily_briefing",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1781179527921,
+      "tag": "0013_user_content_profile",
+      "breakpoints": true
     }
   ]
 }

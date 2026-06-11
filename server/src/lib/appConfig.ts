@@ -14,7 +14,10 @@ const DEFAULTS: AppConfig = {
   linkedin_max_posts: 25,
   linkedin_posted_limit: 'week',
   google_news_max_results: 20,
-  collector_max_classifications: 30,
+  // High enough to classify EVERYTHING a normal run scrapes (≈225 candidates max:
+  // ~5 LinkedIn alias-queries × 25 + ~5 Google-News editions × 20). The old 30
+  // silently discarded most already-scraped (and already-paid) candidates.
+  collector_max_classifications: 300,
   rank_criteria: DEFAULT_RANK_CRITERIA,
 };
 

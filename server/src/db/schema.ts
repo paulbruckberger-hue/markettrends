@@ -171,6 +171,20 @@ export const user_article_state = pgTable('user_article_state', {
   pk: primaryKey({ columns: [t.user_id, t.classification_id] })
 }));
 
+// ---------- User Content Profile (GLOBAL, keyword-übergreifend) ----------
+// Verdichtetes "Was diese Leser:in inhaltlich interessiert", per KI destilliert
+// aus ALLEN 👍/👎 der Nutzer:in über alle Keywords hinweg. Anders als das
+// term-skopierte user_article_state.user_feedback wirkt dieses Profil
+// keyword-übergreifend und fließt in JEDE Personalisierung ein — so lernt die
+// KI aus dem INHALT (nicht nur dem Keyword), was relevant ist.
+export const user_content_profiles = pgTable('user_content_profiles', {
+  user_id: uuid('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  profile: text('profile').notNull(),                              // natürlichsprachiges Interessenprofil
+  feedback_count: integer('feedback_count').notNull().default(0),  // aus wie vielen 👍/👎 destilliert
+  built_at: timestamp('built_at').defaultNow(),
+  updated_at: timestamp('updated_at').defaultNow()
+});
+
 // ---------- RSS Sources (global, Admin-verwaltet) ----------
 export const rss_sources = pgTable('rss_sources', {
   id: uuid('id').primaryKey().defaultRandom(),

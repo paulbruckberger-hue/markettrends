@@ -1,10 +1,15 @@
 import { Router, Response, NextFunction } from 'express';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNotNull } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
 import { db } from '../db/client';
-import { app_config, users, settings, DEFAULT_RANK_CRITERIA, RankCriteria } from '../db/schema';
+import {
+  app_config, users, settings, user_article_state, user_content_profiles,
+  watch_items, DEFAULT_RANK_CRITERIA, RankCriteria,
+} from '../db/schema';
 import { authMiddleware, AuthedRequest } from '../middleware/auth';
 import { rerankBatch, rerankStatus } from '../services/rerank';
+import { loadContentProfile, rebuildContentProfile, repersonalizeUserTerm } from '../services/personalize';
+import { backfillLinkedInRuns, backfillLinkedInStatus } from '../services/backfillLinkedIn';
 
 export const adminRouter = Router();
 
@@ -66,7 +71,10 @@ adminRouter.put('/config', async (req: AuthedRequest, res: Response) => {
     patch.google_news_max_results = Math.min(100, Math.round(b.google_news_max_results));
   }
   if (typeof b.collector_max_classifications === 'number' && b.collector_max_classifications > 0) {
-    patch.collector_max_classifications = Math.min(100, Math.round(b.collector_max_classifications));
+    // Classification is near-free (Gemini Flash); the cap exists only to bound a
+    // single run's wall-time. Raised from 100 so "classify everything scraped"
+    // is actually possible.
+    patch.collector_max_classifications = Math.min(2000, Math.round(b.collector_max_classifications));
   }
   if (isValidRankCriteria(b.rank_criteria)) {
     patch.rank_criteria = b.rank_criteria;
@@ -161,5 +169,93 @@ adminRouter.post('/rerank', async (req: AuthedRequest, res: Response) => {
     res.json(await rerankBatch(limit));
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Rerank fehlgeschlagen' });
+  }
+});
+
+// ─────────────────────────────────────────────
+// Global content profiles + re-apply feedback (Option 2)
+// ─────────────────────────────────────────────
+
+/** All users who have given any 👍/👎 OR already have a content profile. */
+async function usersWithSignal(): Promise<string[]> {
+  const fb = await db.selectDistinct({ id: user_article_state.user_id })
+    .from(user_article_state).where(isNotNull(user_article_state.user_feedback));
+  const prof = await db.select({ id: user_content_profiles.user_id }).from(user_content_profiles);
+  return [...new Set([...fb.map((r) => r.id), ...prof.map((r) => r.id)])];
+}
+
+// POST /api/admin/rebuild-profiles → (re)build every user's global content profile
+// from their existing 👍/👎 across all keywords. Seeds Option 2 from existing ratings.
+adminRouter.post('/rebuild-profiles', async (_req: AuthedRequest, res: Response) => {
+  try {
+    const fb = await db.selectDistinct({ id: user_article_state.user_id })
+      .from(user_article_state).where(isNotNull(user_article_state.user_feedback));
+    const out: { user: string; hasProfile: boolean; profile?: string }[] = [];
+    for (const u of fb) {
+      const profile = await rebuildContentProfile(u.id);
+      out.push({ user: u.id, hasProfile: !!profile, profile: profile ?? undefined });
+    }
+    res.json({ users: fb.length, profilesBuilt: out.filter((o) => o.hasProfile).length, detail: out });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Profil-Aufbau fehlgeschlagen' });
+  }
+});
+
+// GET /api/admin/reapply-feedback → how many (user, term) pairs will be re-personalised
+adminRouter.get('/reapply-feedback', async (_req: AuthedRequest, res: Response) => {
+  const uids = await usersWithSignal();
+  if (uids.length === 0) { res.json({ totalPairs: 0 }); return; }
+  const subs = await db.select({ uid: watch_items.user_id, tid: watch_items.search_term_id })
+    .from(watch_items).where(eq(watch_items.is_active, true));
+  const pairs = subs.filter((s) => uids.includes(s.uid));
+  res.json({ totalPairs: pairs.length });
+});
+
+// POST /api/admin/reapply-feedback { offset, batch } → re-personalise a batch of
+// (user, term) pairs using each user's seeded global profile + term feedback.
+// Resumable & idempotent. Run /rebuild-profiles first.
+adminRouter.post('/reapply-feedback', async (req: AuthedRequest, res: Response) => {
+  const offset = typeof req.body?.offset === 'number' ? Math.max(0, req.body.offset) : 0;
+  const batch = typeof req.body?.batch === 'number' ? Math.min(20, Math.max(1, req.body.batch)) : 5;
+  try {
+    const uids = await usersWithSignal();
+    const subs = await db.select({ uid: watch_items.user_id, tid: watch_items.search_term_id })
+      .from(watch_items).where(eq(watch_items.is_active, true));
+    const pairs = subs.filter((s) => uids.includes(s.uid))
+      .sort((a, b) => (a.uid + a.tid).localeCompare(b.uid + b.tid));
+    const slice = pairs.slice(offset, offset + batch);
+
+    let personalised = 0;
+    for (const p of slice) {
+      personalised += await repersonalizeUserTerm(p.uid, p.tid, 200, { skipProfileRebuild: true });
+    }
+    const nextOffset = offset + slice.length;
+    res.json({ processedPairs: slice.length, personalised, offset, nextOffset, totalPairs: pairs.length, done: nextOffset >= pairs.length });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Re-Apply fehlgeschlagen' });
+  }
+});
+
+// ─────────────────────────────────────────────
+// Backfill: classify already-scraped LinkedIn posts from past Apify runs (no new scrape)
+// ─────────────────────────────────────────────
+
+// GET /api/admin/backfill-linkedin → number of past runs available
+adminRouter.get('/backfill-linkedin', async (_req: AuthedRequest, res: Response) => {
+  try {
+    res.json(await backfillLinkedInStatus());
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Status fehlgeschlagen' });
+  }
+});
+
+// POST /api/admin/backfill-linkedin { offset, runs } → process a batch of past runs
+adminRouter.post('/backfill-linkedin', async (req: AuthedRequest, res: Response) => {
+  const offset = typeof req.body?.offset === 'number' ? Math.max(0, req.body.offset) : 0;
+  const runs = typeof req.body?.runs === 'number' ? Math.min(10, Math.max(1, req.body.runs)) : 3;
+  try {
+    res.json(await backfillLinkedInRuns(offset, runs));
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Backfill fehlgeschlagen' });
   }
 });
