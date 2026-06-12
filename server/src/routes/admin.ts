@@ -1,15 +1,21 @@
 import { Router, Response, NextFunction } from 'express';
-import { and, eq, isNotNull } from 'drizzle-orm';
+import { and, count, desc, eq, isNotNull, or } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
 import { db } from '../db/client';
 import {
   app_config, users, settings, user_article_state, user_content_profiles,
-  watch_items, DEFAULT_RANK_CRITERIA, RankCriteria,
+  watch_items, search_terms, user_invites, DEFAULT_RANK_CRITERIA, RankCriteria,
 } from '../db/schema';
 import { authMiddleware, AuthedRequest } from '../middleware/auth';
 import { rerankBatch, rerankStatus } from '../services/rerank';
 import { loadContentProfile, rebuildContentProfile, repersonalizeUserTerm } from '../services/personalize';
 import { backfillLinkedInRuns, backfillLinkedInStatus } from '../services/backfillLinkedIn';
+import { entitlementsFor } from '../lib/entitlements';
+import { createInvite, sendInviteEmail, inviteAcceptUrl } from '../services/invites';
+import { mailerConfigured } from '../services/mailer';
+import { addWatch, recomputeTermActive } from '../services/watchlistService';
+
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 export const adminRouter = Router();
 
@@ -99,8 +105,18 @@ adminRouter.get('/users', async (_req, res: Response) => {
     role: users.role,
     is_active: users.is_active,
     created_at: users.created_at,
+    plan: users.plan,
+    is_comp: users.is_comp,
+    keyword_bonus: users.keyword_bonus,
+    subscription_status: users.subscription_status,
   }).from(users).orderBy(users.created_at);
-  res.json(rows);
+
+  // Aktive Keyword-Anzahl je User (für used/quota-Anzeige) in einer Abfrage.
+  const counts = await db.select({ uid: watch_items.user_id, cnt: count() })
+    .from(watch_items).where(eq(watch_items.is_active, true)).groupBy(watch_items.user_id);
+  const usedMap = new Map(counts.map((c) => [c.uid, Number(c.cnt)]));
+
+  res.json(rows.map((u) => ({ ...u, used: usedMap.get(u.id) ?? 0, entitlements: entitlementsFor(u) })));
 });
 
 // POST /api/admin/users  → create user
@@ -130,13 +146,18 @@ adminRouter.post('/users', async (req: AuthedRequest, res: Response) => {
   res.status(201).json({ id: created.id, username: created.username, role: created.role, is_active: created.is_active });
 });
 
-// PUT /api/admin/users/:id  → toggle active / change role
+// PUT /api/admin/users/:id  → aktiv/Rolle/E-Mail + Tarif/Comp/Bonus-Keywords
 adminRouter.put('/users/:id', async (req: AuthedRequest, res: Response) => {
   const b = req.body ?? {};
   const patch: Record<string, unknown> = {};
   if (typeof b.is_active === 'boolean') patch.is_active = b.is_active;
   if (b.role === 'admin' || b.role === 'user') patch.role = b.role;
   if (typeof b.email === 'string') patch.email = b.email.trim() || null;
+  if (b.plan === 'free' || b.plan === 'plus' || b.plan === 'pro') patch.plan = b.plan;
+  if (typeof b.is_comp === 'boolean') patch.is_comp = b.is_comp;
+  if (Number.isInteger(b.keyword_bonus) && b.keyword_bonus >= 0) {
+    patch.keyword_bonus = Math.min(1000, b.keyword_bonus);
+  }
 
   if (Object.keys(patch).length === 0) {
     res.status(400).json({ error: 'Keine gültigen Felder' });
@@ -145,12 +166,201 @@ adminRouter.put('/users/:id', async (req: AuthedRequest, res: Response) => {
   const [updated] = await db.update(users)
     .set(patch)
     .where(eq(users.id, req.params.id))
-    .returning({ id: users.id, username: users.username, role: users.role, is_active: users.is_active, email: users.email });
+    .returning();
   if (!updated) {
     res.status(404).json({ error: 'Benutzer nicht gefunden' });
     return;
   }
+  res.json({
+    id: updated.id, username: updated.username, email: updated.email, role: updated.role,
+    is_active: updated.is_active, plan: updated.plan, is_comp: updated.is_comp,
+    keyword_bonus: updated.keyword_bonus, entitlements: entitlementsFor(updated),
+  });
+});
+
+// POST /api/admin/users/:id/reset-password
+adminRouter.post('/users/:id/reset-password', async (req: AuthedRequest, res: Response) => {
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  if (password.length < 4) {
+    res.status(400).json({ error: 'Passwort (min. 4 Zeichen) erforderlich' });
+    return;
+  }
+  const [updated] = await db.update(users)
+    .set({ password_hash: bcrypt.hashSync(password, 10) })
+    .where(eq(users.id, req.params.id))
+    .returning({ id: users.id });
+  if (!updated) {
+    res.status(404).json({ error: 'Benutzer nicht gefunden' });
+    return;
+  }
+  res.json({ success: true });
+});
+
+// DELETE /api/admin/users/:id  (Schutz: nicht sich selbst, nicht der letzte Admin)
+adminRouter.delete('/users/:id', async (req: AuthedRequest, res: Response) => {
+  const id = req.params.id;
+  if (id === req.user!.id) {
+    res.status(400).json({ error: 'Du kannst dich nicht selbst löschen' });
+    return;
+  }
+  const [target] = await db.select().from(users).where(eq(users.id, id));
+  if (!target) {
+    res.status(404).json({ error: 'Benutzer nicht gefunden' });
+    return;
+  }
+  if (target.role === 'admin') {
+    const [{ c }] = await db.select({ c: count() }).from(users).where(eq(users.role, 'admin'));
+    if (Number(c) <= 1) {
+      res.status(400).json({ error: 'Der letzte Admin kann nicht gelöscht werden' });
+      return;
+    }
+  }
+  await db.delete(users).where(eq(users.id, id)); // Abos/Settings cascaden
+  res.json({ success: true });
+});
+
+// ─────────────────────────────────────────────
+// Invites (Admin lädt Kund:innen per E-Mail ein)
+// ─────────────────────────────────────────────
+
+// GET /api/admin/invites
+adminRouter.get('/invites', async (_req, res: Response) => {
+  const rows = await db.select().from(user_invites).orderBy(desc(user_invites.created_at));
+  res.json(rows.map((r) => ({ ...r, accept_url: inviteAcceptUrl(r.token) })));
+});
+
+// POST /api/admin/invites  { email, role?, plan?, keyword_bonus? }
+adminRouter.post('/invites', async (req: AuthedRequest, res: Response) => {
+  const email = typeof req.body?.email === 'string' ? req.body.email.toLowerCase().trim() : '';
+  if (!EMAIL_RE.test(email)) {
+    res.status(400).json({ error: 'Bitte eine gültige E-Mail-Adresse angeben' });
+    return;
+  }
+  const [existing] = await db.select({ id: users.id }).from(users)
+    .where(or(eq(users.username, email), eq(users.email, email)));
+  if (existing) {
+    res.status(409).json({ error: 'Für diese E-Mail existiert bereits ein Konto' });
+    return;
+  }
+  const plan = ['free', 'plus', 'pro'].includes(req.body?.plan) ? req.body.plan : 'free';
+  const role = req.body?.role === 'admin' ? 'admin' : 'user';
+  const keyword_bonus = Number.isInteger(req.body?.keyword_bonus) ? Math.max(0, req.body.keyword_bonus) : 0;
+
+  const invite = await createInvite({ email, role, plan, keyword_bonus, invited_by: req.user!.id });
+
+  let emailed = false;
+  let email_error: string | undefined;
+  if (mailerConfigured()) {
+    try { await sendInviteEmail(invite); emailed = true; }
+    catch (err) { email_error = err instanceof Error ? err.message : 'E-Mail-Versand fehlgeschlagen'; }
+  }
+  // accept_url immer zurückgeben → der Admin kann den Link auch manuell teilen,
+  // selbst wenn SMTP (noch) nicht konfiguriert ist.
+  res.status(201).json({ invite, emailed, accept_url: inviteAcceptUrl(invite.token), email_error });
+});
+
+// DELETE /api/admin/invites/:id
+adminRouter.delete('/invites/:id', async (req: AuthedRequest, res: Response) => {
+  const [deleted] = await db.delete(user_invites).where(eq(user_invites.id, req.params.id)).returning({ id: user_invites.id });
+  if (!deleted) {
+    res.status(404).json({ error: 'Einladung nicht gefunden' });
+    return;
+  }
+  res.json({ success: true });
+});
+
+// ─────────────────────────────────────────────
+// User-Keywords verwalten (Admin pflegt die Beobachtungen eines Users)
+// ─────────────────────────────────────────────
+
+async function ensureUserExists(id: string): Promise<boolean> {
+  const [u] = await db.select({ id: users.id }).from(users).where(eq(users.id, id));
+  return !!u;
+}
+
+// GET /api/admin/users/:id/watchlist
+adminRouter.get('/users/:id/watchlist', async (req: AuthedRequest, res: Response) => {
+  if (!(await ensureUserExists(req.params.id))) {
+    res.status(404).json({ error: 'Benutzer nicht gefunden' });
+    return;
+  }
+  const rows = await db.select({
+    id: watch_items.id,
+    display_name: watch_items.display_name,
+    label: watch_items.label,
+    color: watch_items.color,
+    is_active: watch_items.is_active,
+    created_at: watch_items.created_at,
+    search_term_id: search_terms.id,
+    type: search_terms.type,
+    query_display: search_terms.query_display,
+    geo_filter: search_terms.geo_filter,
+  })
+    .from(watch_items)
+    .innerJoin(search_terms, eq(watch_items.search_term_id, search_terms.id))
+    .where(eq(watch_items.user_id, req.params.id))
+    .orderBy(desc(watch_items.created_at));
+  res.json(rows);
+});
+
+// POST /api/admin/users/:id/watchlist  → Keyword für den User anlegen (ohne Quota)
+adminRouter.post('/users/:id/watchlist', async (req: AuthedRequest, res: Response) => {
+  if (!(await ensureUserExists(req.params.id))) {
+    res.status(404).json({ error: 'Benutzer nicht gefunden' });
+    return;
+  }
+  const b = req.body ?? {};
+  const type = b.type === 'company' ? 'company' : b.type === 'topic' ? 'topic' : null;
+  const query = typeof b.query === 'string' ? b.query.trim() : '';
+  if (!type || !query) {
+    res.status(400).json({ error: 'type (topic|company) und query erforderlich' });
+    return;
+  }
+  const { watchItem, term } = await addWatch(req.params.id, {
+    type, query,
+    geo_filter: b.geo_filter,
+    display_name: typeof b.display_name === 'string' ? b.display_name : undefined,
+    label: typeof b.label === 'string' ? b.label : undefined,
+    color: typeof b.color === 'string' ? b.color : undefined,
+  }, { enforceQuota: false });
+  res.status(201).json({ ...watchItem, search_term: term });
+});
+
+// PUT /api/admin/users/:id/watchlist/:itemId  → umbenennen / aktiv schalten
+adminRouter.put('/users/:id/watchlist/:itemId', async (req: AuthedRequest, res: Response) => {
+  const b = req.body ?? {};
+  const patch: Record<string, unknown> = {};
+  if (typeof b.display_name === 'string') patch.display_name = b.display_name.trim();
+  if (typeof b.label === 'string') patch.label = b.label;
+  if (typeof b.color === 'string') patch.color = b.color;
+  if (typeof b.is_active === 'boolean') patch.is_active = b.is_active;
+  if (Object.keys(patch).length === 0) {
+    res.status(400).json({ error: 'Keine gültigen Felder' });
+    return;
+  }
+  const [updated] = await db.update(watch_items)
+    .set(patch)
+    .where(and(eq(watch_items.id, req.params.itemId), eq(watch_items.user_id, req.params.id)))
+    .returning();
+  if (!updated) {
+    res.status(404).json({ error: 'Keyword nicht gefunden' });
+    return;
+  }
+  await recomputeTermActive(updated.search_term_id);
   res.json(updated);
+});
+
+// DELETE /api/admin/users/:id/watchlist/:itemId
+adminRouter.delete('/users/:id/watchlist/:itemId', async (req: AuthedRequest, res: Response) => {
+  const [deleted] = await db.delete(watch_items)
+    .where(and(eq(watch_items.id, req.params.itemId), eq(watch_items.user_id, req.params.id)))
+    .returning();
+  if (!deleted) {
+    res.status(404).json({ error: 'Keyword nicht gefunden' });
+    return;
+  }
+  await recomputeTermActive(deleted.search_term_id);
+  res.json({ success: true });
 });
 
 // ─────────────────────────────────────────────

@@ -23,6 +23,32 @@ export function useLogin() {
   });
 }
 
+export function useRegister() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { email: string; password: string }) =>
+      (await api.post<{ token: string; user: AuthUser }>('/api/auth/register', vars)).data,
+    onSuccess: (data) => {
+      setToken(data.token);
+      qc.setQueryData(['me'], data.user);
+      qc.invalidateQueries({ queryKey: ['me'] }); // vollständiges /me (plan, entitlements) nachladen
+    },
+  });
+}
+
+export function useAcceptInvite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { token: string; password: string }) =>
+      (await api.post<{ token: string; user: AuthUser }>('/api/auth/accept-invite', vars)).data,
+    onSuccess: (data) => {
+      setToken(data.token);
+      qc.setQueryData(['me'], data.user);
+      qc.invalidateQueries({ queryKey: ['me'] });
+    },
+  });
+}
+
 export function useLogout() {
   const qc = useQueryClient();
   return () => {

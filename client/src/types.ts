@@ -328,6 +328,37 @@ export interface AdminUser {
   role: string;
   is_active: boolean;
   created_at: string | null;
+  plan?: PlanTier;
+  is_comp?: boolean;
+  keyword_bonus?: number;
+  subscription_status?: string | null;
+  used?: number;
+  entitlements?: Entitlements;
+}
+
+export interface UserInvite {
+  id: string;
+  email: string;
+  role: string;
+  plan: PlanTier;
+  keyword_bonus: number;
+  accepted_at: string | null;
+  expires_at: string;
+  created_at: string | null;
+  accept_url: string;
+}
+
+export interface AdminWatchItem {
+  id: string;
+  display_name: string;
+  label: string | null;
+  color: string | null;
+  is_active: boolean;
+  created_at: string | null;
+  search_term_id: string;
+  type: WatchType;
+  query_display: string;
+  geo_filter: GeoFilter;
 }
 
 export interface RunStatus {

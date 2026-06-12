@@ -3,27 +3,12 @@ import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { search_terms, watch_items, job_runs } from '../db/schema';
 import { authMiddleware, AuthedRequest } from '../middleware/auth';
-import { normalizeQuery } from '../lib/hash';
 import { triggerCollector } from '../lib/jobTrigger';
-import { GeoFilter, SourcesConfig, WatchType } from '../types';
+import { addWatch, recomputeTermActive, QuotaExceededError } from '../services/watchlistService';
+import { WatchType } from '../types';
 
 export const watchlistRouter = Router();
 watchlistRouter.use(authMiddleware);
-
-const DEFAULT_SOURCES: SourcesConfig = {
-  linkedin_posts: true, linkedin_company_page: false,
-  google_news: true, rss: true, newsroom: false,
-};
-
-/** After any subscription change, a term is active iff ≥1 active abo exists. */
-async function recomputeTermActive(searchTermId: string): Promise<void> {
-  const active = await db.select({ id: watch_items.id })
-    .from(watch_items)
-    .where(and(eq(watch_items.search_term_id, searchTermId), eq(watch_items.is_active, true)));
-  await db.update(search_terms)
-    .set({ is_active: active.length > 0 })
-    .where(eq(search_terms.id, searchTermId));
-}
 
 // GET /api/watchlist
 watchlistRouter.get('/', async (req: AuthedRequest, res: Response) => {
@@ -79,7 +64,7 @@ watchlistRouter.get('/', async (req: AuthedRequest, res: Response) => {
   res.json(rows.map((r) => ({ ...r, ...(aggMap.get(r.id) ?? { signals: 0, unread: 0, momentum: 0 }) })));
 });
 
-// POST /api/watchlist  → dedupliziertes search_term + User-Abo
+// POST /api/watchlist  → dedupliziertes search_term + User-Abo (mit Tarif-Quota)
 watchlistRouter.post('/', async (req: AuthedRequest, res: Response) => {
   const b = req.body ?? {};
   const type = b.type as WatchType;
@@ -88,49 +73,29 @@ watchlistRouter.post('/', async (req: AuthedRequest, res: Response) => {
     res.status(400).json({ error: 'type (topic|company) und query erforderlich' });
     return;
   }
-
-  const geo_filter: GeoFilter = ['global', 'dach', 'austria'].includes(b.geo_filter) ? b.geo_filter : 'global';
-  const query_normalized = normalizeQuery(query);
-  const sources_config: SourcesConfig = { ...DEFAULT_SOURCES, ...(b.sources_config ?? {}) };
-
-  // 1+2. Upsert shared search_term (dedup on type+query+geo). Reuses existing row.
-  const [term] = await db.insert(search_terms).values({
-    type,
-    query_normalized,
-    query_display: query.trim(),
-    geo_filter,
-    sources_config,
-    company_linkedin_id: type === 'company' ? (b.company_linkedin_id ?? null) : null,
-    company_newsroom_url: type === 'company' ? (b.company_newsroom_url ?? null) : null,
-    company_domain: type === 'company' ? (b.company_domain ?? null) : null,
-    is_active: true,
-  }).onConflictDoUpdate({
-    target: [search_terms.type, search_terms.query_normalized, search_terms.geo_filter],
-    set: { is_active: true },
-  }).returning();
-
-  // 3. Create the user's subscription (idempotent).
-  const [created] = await db.insert(watch_items).values({
-    user_id: req.user!.id,
-    search_term_id: term.id,
-    display_name: typeof b.display_name === 'string' && b.display_name.trim() ? b.display_name.trim() : query.trim(),
-    label: typeof b.label === 'string' ? b.label : null,
-    color: typeof b.color === 'string' ? b.color : '#3B82F6',
-    is_active: true,
-  }).onConflictDoNothing({ target: [watch_items.user_id, watch_items.search_term_id] }).returning();
-
-  let watchItem = created;
-  if (!watchItem) {
-    // Already subscribed — return the existing (re-activate if needed).
-    const [existing] = await db.update(watch_items)
-      .set({ is_active: true })
-      .where(and(eq(watch_items.user_id, req.user!.id), eq(watch_items.search_term_id, term.id)))
-      .returning();
-    watchItem = existing;
+  try {
+    const { watchItem, term } = await addWatch(req.user!.id, {
+      type, query,
+      geo_filter: b.geo_filter,
+      display_name: typeof b.display_name === 'string' ? b.display_name : undefined,
+      label: typeof b.label === 'string' ? b.label : undefined,
+      color: typeof b.color === 'string' ? b.color : undefined,
+      sources_config: b.sources_config,
+      company_linkedin_id: b.company_linkedin_id,
+      company_newsroom_url: b.company_newsroom_url,
+      company_domain: b.company_domain,
+    }, { enforceQuota: true });
+    res.status(201).json({ ...watchItem, search_term: term });
+  } catch (err) {
+    if (err instanceof QuotaExceededError) {
+      res.status(402).json({
+        error: `Dein Tarif erlaubt ${err.quota} aktive${err.quota === 1 ? 's' : ''} Keyword${err.quota === 1 ? '' : 's'}. Upgrade für mehr.`,
+        code: 'quota_exceeded', quota: err.quota, plan: err.plan,
+      });
+      return;
+    }
+    throw err;
   }
-
-  await recomputeTermActive(term.id);
-  res.status(201).json({ ...watchItem, search_term: term });
 });
 
 // PUT /api/watchlist/:id
