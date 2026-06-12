@@ -7,11 +7,30 @@ export type SignalType =
 export type SourceTypeName =
   | 'linkedin_post' | 'linkedin_company' | 'google_news' | 'rss' | 'newsroom';
 
+export type PlanTier = 'free' | 'plus' | 'pro';
+
+export interface Entitlements {
+  plan: PlanTier;
+  effective_plan: PlanTier;
+  quota: number | null;        // null = unbegrenzt (Admin)
+  unlimited: boolean;
+  is_comp: boolean;
+  is_admin: boolean;
+  keyword_bonus: number;
+  used: number;                // aktuell aktive Keywords
+  remaining: number | null;    // null = unbegrenzt
+}
+
 export interface AuthUser {
   id: string;
   username: string;
   role: string;
   email?: string | null;
+  onboarding_completed?: boolean;
+  plan?: PlanTier;
+  subscription_status?: string | null;
+  current_period_end?: string | null;
+  entitlements?: Entitlements;
 }
 
 export interface SourcesConfig {

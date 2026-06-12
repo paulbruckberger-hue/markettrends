@@ -17,6 +17,9 @@ export const signalTypeEnum = pgEnum('signal_type', [
   'product_launch', 'expansion', 'partnership', 'personnel',
   'funding', 'regulatory', 'earnings', 'general'
 ]);
+// Abo-Stufen. Entitlements (Keyword-Quota) leiten sich daraus ab — siehe
+// lib/entitlements.ts. 'free' ist der Default jeder Selbst-Registrierung.
+export const planTierEnum = pgEnum('plan_tier', ['free', 'plus', 'pro']);
 
 // ---------- Users ----------
 export const users = pgTable('users', {
@@ -26,8 +29,59 @@ export const users = pgTable('users', {
   email: text('email'),
   role: text('role').notNull().default('user'),       // 'admin' | 'user'
   is_active: boolean('is_active').notNull().default(true),
+
+  // ----- Onboarding -----
+  // Interessen-Abfrage (Onboarding) erscheint genau einmal: nach der ersten
+  // Anmeldung. Persistiert serverseitig (früher localStorage → pro Gerät neu).
+  onboarding_completed: boolean('onboarding_completed').notNull().default(false),
+
+  // ----- Abo / Entitlements (Freemium nach Keyword-Anzahl) -----
+  plan: planTierEnum('plan').notNull().default('free'),
+  // Admin: zusätzliche Gratis-Keywords ON TOP der Plan-Quota für einzelne User.
+  keyword_bonus: integer('keyword_bonus').notNull().default(0),
+  // Admin: voll gratis freischalten → Pro-Rechte ohne Stripe-Abo.
+  is_comp: boolean('is_comp').notNull().default(false),
+
+  // ----- Stripe (von services/stripe.ts + Webhook gepflegt) -----
+  stripe_customer_id: text('stripe_customer_id'),
+  stripe_subscription_id: text('stripe_subscription_id'),
+  subscription_status: text('subscription_status'),   // active|trialing|past_due|canceled|null
+  current_period_end: timestamp('current_period_end'),
+
   created_at: timestamp('created_at').defaultNow()
 });
+
+// ---------- User Invites (Admin lädt Kund:innen per E-Mail ein) ----------
+// Eine Einladung trägt den vorgesehenen Plan/Rolle/Bonus. Annahme über den
+// signierten Link → /accept-invite setzt Passwort, accepted_at markiert verbraucht.
+export const user_invites = pgTable('user_invites', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  email: text('email').notNull(),
+  token: text('token').notNull().unique(),
+  role: text('role').notNull().default('user'),
+  plan: planTierEnum('plan').notNull().default('free'),
+  keyword_bonus: integer('keyword_bonus').notNull().default(0),
+  invited_by: uuid('invited_by').references(() => users.id, { onDelete: 'set null' }),
+  accepted_at: timestamp('accepted_at'),
+  expires_at: timestamp('expires_at').notNull(),
+  created_at: timestamp('created_at').defaultNow()
+}, (t) => ({
+  emailIdx: index('idx_user_invites_email').on(t.email),
+}));
+
+// ---------- Bot Sessions (transienter Signup-Status für Messenger) ----------
+// Cloud Run ist zustandslos → der mehrschrittige Telegram-/WhatsApp-Signup-
+// Dialog speichert seinen Schritt hier (kanal-agnostisch). Kurzlebig.
+export const bot_sessions = pgTable('bot_sessions', {
+  channel: text('channel').notNull(),                 // 'telegram' | 'whatsapp'
+  chat_id: text('chat_id').notNull(),
+  step: text('step').notNull(),                       // z.B. 'awaiting_keyword' | 'awaiting_email'
+  data: jsonb('data').$type<Record<string, unknown>>().default({}),
+  expires_at: timestamp('expires_at'),
+  updated_at: timestamp('updated_at').defaultNow()
+}, (t) => ({
+  pk: primaryKey({ columns: [t.channel, t.chat_id] }),
+}));
 
 // ---------- Search Terms (GETEILT, dedupliziert über alle User) ----------
 // Hier läuft jede Suche genau einmal. Mehrere User-Abos zeigen auf dieselbe Zeile.

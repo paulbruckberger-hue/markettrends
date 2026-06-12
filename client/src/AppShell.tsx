@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { BottomNav, Toast } from './components/ui';
 import { useTheme } from './lib/theme';
 import { useItemActions } from './hooks/useItemActions';
-import { useMe, useLogout } from './hooks/useAuth';
+import { useMe, useLogout, useCompleteOnboarding } from './hooks/useAuth';
 import { useWatchlist } from './hooks/useWatchlist';
 import { DisplayItem } from './lib/presenter';
 
@@ -21,7 +21,6 @@ import Onboarding from './screens/Onboarding';
 import AdminScreen from './screens/AdminScreen';
 
 const TAB_ROUTES = ['feed', 'explore', 'watchlist', 'analytics'];
-const ONBOARD_KEY = 'nl_onboarded';
 const CARD_KEY = 'nl_card';
 
 interface Entry { name: string; params: Record<string, unknown> }
@@ -30,9 +29,9 @@ export default function AppShell() {
   const { theme, setTheme, accent, setAccent } = useTheme();
   const { data: me } = useMe();
   const logout = useLogout();
+  const completeOnboarding = useCompleteOnboarding();
   const { data: watches } = useWatchlist();
 
-  const [onboarded, setOnboarded] = useState(() => localStorage.getItem(ONBOARD_KEY) === '1');
   const [cardVariant, setCardVariant] = useState(() => localStorage.getItem(CARD_KEY) || 'standard');
   const setVariant = (v: string) => { localStorage.setItem(CARD_KEY, v); setCardVariant(v); };
 
@@ -61,8 +60,11 @@ export default function AppShell() {
     [watches],
   );
 
-  if (!onboarded) {
-    return <Onboarding onDone={() => { localStorage.setItem(ONBOARD_KEY, '1'); setOnboarded(true); }} />;
+  // Interessen-Abfrage erscheint genau einmal: solange das serverseitige Flag
+  // onboarding_completed false ist. Danach nie wieder — geräteübergreifend.
+  if (me && !me.onboarding_completed) {
+    const maxKeywords = me.entitlements?.unlimited ? null : (me.entitlements?.quota ?? 3);
+    return <Onboarding maxKeywords={maxKeywords} onDone={() => completeOnboarding.mutate()} />;
   }
 
   const openDetail = (item: DisplayItem) => nav('detail', { item });

@@ -3,10 +3,11 @@ import { BrandMark, BrandWord, UserCircle, Verified } from '../components/ui';
 import { Icon, IconName } from '../components/Icon';
 import { useTheme } from '../lib/theme';
 import { useItemActions } from '../hooks/useItemActions';
-import { useLogout, useMe } from '../hooks/useAuth';
+import { useLogout, useMe, useCompleteOnboarding } from '../hooks/useAuth';
 import { useWatchlist } from '../hooks/useWatchlist';
 import { DisplayItem } from '../lib/presenter';
 import { AuthUser } from '../types';
+import Onboarding from '../screens/Onboarding';
 import { ComposeModal } from './deskChrome';
 import { RightRail } from './RightRail';
 import {
@@ -103,6 +104,7 @@ export default function DesktopShell() {
   const { theme, setTheme, accent, setAccent } = useTheme();
   const { data: me } = useMe();
   const logout = useLogout();
+  const completeOnboarding = useCompleteOnboarding();
   const { data: watches } = useWatchlist();
 
   const [cardVariant, setCardVariant] = useState(() => localStorage.getItem(CARD_KEY) || 'standard');
@@ -130,6 +132,13 @@ export default function DesktopShell() {
   const back = () => setStack((s) => (s.length > 1 ? s.slice(0, -1) : s));
 
   const unread = useMemo(() => (watches ?? []).reduce((sum, w) => sum + (w.unread ?? 0), 0), [watches]);
+
+  // Interessen-Abfrage genau einmal nach der ersten Anmeldung (auch am Desktop —
+  // hier wurde sie früher gar nicht gezeigt). Serverseitiges Flag steuert es.
+  if (me && !me.onboarding_completed) {
+    const maxKeywords = me.entitlements?.unlimited ? null : (me.entitlements?.quota ?? 3);
+    return <Onboarding maxKeywords={maxKeywords} onDone={() => completeOnboarding.mutate()} />;
+  }
 
   const activeTab = TAB_ROUTES.includes(current.name) ? current.name
     : current.name === 'detail' ? 'feed'

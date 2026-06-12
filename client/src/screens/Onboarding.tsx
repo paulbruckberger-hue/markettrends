@@ -11,18 +11,27 @@ const SUGG: { n: string; t: WatchType; c: string }[] = [
   { n: 'Revolut', t: 'company', c: '#7c5cff' }, { n: 'Solaris', t: 'company', c: '#1d3fcc' },
 ];
 
-export default function Onboarding({ onDone }: { onDone: () => void }) {
+export default function Onboarding({ onDone, maxKeywords }: { onDone: () => void; maxKeywords: number | null }) {
+  // Auswahl an die Keyword-Quota des Tarifs koppeln: Gratis = 1 → es wird genau
+  // ein erstes Thema gewählt (sonst würden überzählige Anlagen später an der
+  // Quota scheitern). Unbegrenzt (Admin/Comp) → maxKeywords = null.
+  const cap = maxKeywords == null ? Infinity : Math.max(1, maxKeywords);
+  const minPick = Math.min(3, Number.isFinite(cap) ? cap : 3);
   const [step, setStep] = useState(0);
   const [picked, setPicked] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const create = useCreateWatch();
 
-  const toggle = (n: string) => setPicked((p) => p.includes(n) ? p.filter((x) => x !== n) : [...p, n]);
+  const toggle = (n: string) => setPicked((p) => {
+    if (p.includes(n)) return p.filter((x) => x !== n);
+    if (p.length >= cap) return p;        // Quota erreicht → keine weitere Auswahl
+    return [...p, n];
+  });
 
   const finish = async () => {
     setBusy(true);
     try {
-      const chosen = SUGG.filter((s) => picked.includes(s.n));
+      const chosen = SUGG.filter((s) => picked.includes(s.n)).slice(0, Number.isFinite(cap) ? cap : undefined);
       for (const s of chosen) {
         try { await create.mutateAsync({ type: s.t, query: s.n, geo_filter: 'global' }); } catch { /* keep going */ }
       }
@@ -60,7 +69,11 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
         {step === 1 && (
           <div className="fade-up" style={{ padding: '8px 22px' }}>
             <div style={{ fontWeight: 900, fontSize: 25, letterSpacing: -0.5 }}>Was möchtest du beobachten?</div>
-            <div style={{ color: 'var(--text-2)', fontSize: 14.5, marginTop: 8 }}>Wähle mindestens 3 — du kannst jederzeit mehr hinzufügen.</div>
+            <div style={{ color: 'var(--text-2)', fontSize: 14.5, marginTop: 8 }}>
+              {cap === 1
+                ? 'Wähle dein erstes Thema — weitere kannst du später (mit einem höheren Tarif) hinzufügen.'
+                : `Wähle ${minPick === 1 ? 'ein Thema' : `mindestens ${minPick}`}${Number.isFinite(cap) ? ` (max. ${cap})` : ''} — du kannst es jederzeit ändern.`}
+            </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 20 }}>
               {SUGG.map((s) => {
                 const on = picked.includes(s.n);
@@ -83,7 +96,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
             <div style={{ width: 76, height: 76, borderRadius: '50%', background: 'color-mix(in srgb, var(--pos) 18%, transparent)', color: 'var(--pos)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}><Icon name="check" size={42} /></div>
             <div style={{ fontWeight: 900, fontSize: 27, letterSpacing: -0.6 }}>Alles startklar</div>
             <div style={{ color: 'var(--text-2)', fontSize: 15.5, lineHeight: 1.5, maxWidth: 300, margin: '14px auto 0' }}>
-              {picked.length || 3} Beobachtungen werden angelegt. Die erste Aufklärung läuft gleich los — dein Feed füllt sich mit gerankten Signalen.
+              {picked.length || minPick} Beobachtung{(picked.length || minPick) === 1 ? '' : 'en'} {(picked.length || minPick) === 1 ? 'wird' : 'werden'} angelegt. Die erste Aufklärung läuft gleich los — dein Feed füllt sich mit gerankten Signalen.
             </div>
           </div>
         )}
@@ -93,10 +106,10 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
         <div style={{ display: 'flex', gap: 7, justifyContent: 'center', marginBottom: 16 }}>
           {[0, 1, 2].map((i) => <span key={i} style={{ width: i === step ? 22 : 7, height: 7, borderRadius: 999, background: i === step ? 'var(--accent)' : 'var(--border-strong)', transition: 'width .2s' }} />)}
         </div>
-        <button className="pill pill-accent press" disabled={(step === 1 && picked.length < 3) || busy}
+        <button className="pill pill-accent press" disabled={(step === 1 && picked.length < minPick) || busy}
           onClick={() => (step < 2 ? setStep(step + 1) : finish())}
-          style={{ width: '100%', padding: '15px 0', fontSize: 16, opacity: ((step === 1 && picked.length < 3) || busy) ? 0.5 : 1 }}>
-          {busy ? 'Lege an …' : step === 0 ? 'Los geht’s' : step === 1 ? (picked.length < 3 ? `Noch ${3 - picked.length} wählen` : 'Weiter') : 'Feed öffnen'}
+          style={{ width: '100%', padding: '15px 0', fontSize: 16, opacity: ((step === 1 && picked.length < minPick) || busy) ? 0.5 : 1 }}>
+          {busy ? 'Lege an …' : step === 0 ? 'Los geht’s' : step === 1 ? (picked.length < minPick ? `Noch ${minPick - picked.length} wählen` : 'Weiter') : 'Feed öffnen'}
         </button>
         {step === 0 && <button className="press" onClick={onDone} style={{ width: '100%', marginTop: 10, background: 'none', border: 'none', color: 'var(--text-3)', fontSize: 14, fontWeight: 600, cursor: 'pointer', padding: 6 }}>Überspringen</button>}
       </div>

@@ -32,4 +32,19 @@ export function useLogout() {
   };
 }
 
+/** Persistiert „Onboarding erledigt" serverseitig (erscheint danach nie wieder). */
+export function useCompleteOnboarding() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => (await api.post('/api/auth/onboarding/complete')).data,
+    // Optimistisch im Cache setzen, damit das Onboarding sofort verschwindet,
+    // auch bevor /me neu geladen ist.
+    onMutate: () => {
+      qc.setQueryData<AuthUser>(['me'], (prev) =>
+        prev ? { ...prev, onboarding_completed: true } : prev);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['me'] }),
+  });
+}
+
 export const isLoggedIn = (): boolean => !!getToken();
