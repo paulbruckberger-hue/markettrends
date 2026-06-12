@@ -59,12 +59,16 @@ export async function sendWhatsApp(phone: string, apikey: string, text: string):
 
   return withRetry(async () => {
     const resp = await fetch(url, { method: 'GET' });
-    const body = await resp.text();
-    // CallMeBot antwortet mit HTTP 200 + Klartext/HTML. Erfolg = "Message queued"
-    // bzw. "Message Sent". Fehler (falscher Key, Nummer nicht freigeschaltet)
-    // kommen als 203/HTML mit "ERROR"/"APIKEY".
-    if (!resp.ok || /error|apikey is incorrect|not.*registered|you need to/i.test(body)) {
-      throw new Error(`CallMeBot: ${body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200) || resp.status}`);
+    const raw = await resp.text();
+    const body = raw.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    // CallMeBot liefert IMMER HTTP 200 mit Klartext/HTML, auch bei Fehlern. Die
+    // Antwort enthält stets "Message to: … Text to send: …" als Echo; danach
+    // entweder Erfolg ("Message queued/sent") oder der Fehlergrund ("APIKey is
+    // invalid", "apikey parameter is missing", "not registered" …). Daher NICHT
+    // nach Fehlerwörtern raten, sondern Erfolg explizit verlangen.
+    const success = /queued|message sent|will receive it/i.test(body);
+    if (!resp.ok || !success) {
+      throw new Error(`CallMeBot: ${body.slice(0, 220) || resp.status}`);
     }
-  }, { label: 'whatsapp(callmebot)', attempts: 3, baseDelayMs: 1000 });
+  }, { label: 'whatsapp(callmebot)', attempts: 2, baseDelayMs: 800 });
 }
