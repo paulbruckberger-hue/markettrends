@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import axios from 'axios';
 import { api } from '../lib/api';
 import { GeoFilter, RunStatus, ScheduleInterval, WatchItem, WatchType } from '../types';
 
@@ -26,6 +27,15 @@ export function useCreateWatch() {
   return useMutation({
     mutationFn: async (input: CreateWatchInput) => (await api.post('/api/watchlist', input)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['watchlist'] }),
+    onError: (err) => {
+      // Tarif-Quota erreicht → globales Upgrade-Sheet öffnen (QuotaUpgradeListener).
+      if (axios.isAxiosError(err) && err.response?.status === 402) {
+        const data = err.response.data as { code?: string; error?: string };
+        if (data?.code === 'quota_exceeded') {
+          window.dispatchEvent(new CustomEvent('nl:upgrade', { detail: data.error }));
+        }
+      }
+    },
   });
 }
 

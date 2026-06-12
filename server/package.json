@@ -29,7 +29,8 @@
     "jsonwebtoken": "^9.0.2",
     "nodemailer": "^6.9.16",
     "pg": "^8.13.1",
-    "rss-parser": "^3.13.0"
+    "rss-parser": "^3.13.0",
+    "stripe": "^22.2.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

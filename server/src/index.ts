@@ -16,6 +16,8 @@ import { clustersRouter } from './routes/clusters';
 import { emailFeedbackRouter, feedbackPageHandler } from './routes/feedback';
 import { webhookRouter } from './routes/webhook';
 import { adminRouter } from './routes/admin';
+import { billingRouter } from './routes/billing';
+import { constructEvent, handleEvent } from './services/stripe';
 
 function buildCorsOrigins(): (string | RegExp)[] {
   const origins = new Set<string>([
@@ -36,6 +38,22 @@ async function start(): Promise<void> {
   app.set('trust proxy', 1);
   app.use(helmet());
   app.use(cors({ origin: buildCorsOrigins(), credentials: false }));
+
+  // Stripe-Webhook braucht den ROHEN Request-Body für die Signaturprüfung —
+  // daher VOR dem globalen express.json() registrieren (sonst ist der Body schon geparst).
+  app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), async (req: Request, res: Response) => {
+    const sig = req.header('stripe-signature');
+    if (!sig) { res.status(400).json({ error: 'Signatur fehlt' }); return; }
+    try {
+      const event = constructEvent(req.body as Buffer, sig);
+      await handleEvent(event);
+      res.json({ received: true });
+    } catch (err) {
+      console.error('[stripe webhook]', err instanceof Error ? err.message : err);
+      res.status(400).json({ error: 'Webhook-Verifizierung fehlgeschlagen' });
+    }
+  });
+
   app.use(express.json({ limit: '1mb' }));
 
   const authLimiter = rateLimit({
@@ -56,6 +74,7 @@ async function start(): Promise<void> {
   app.use('/api/digest', digestRouter);
   app.use('/api/clusters', clustersRouter);
   app.use('/api/admin', adminRouter);
+  app.use('/api/billing', billingRouter);
 
   // Public, token-authenticated newsletter feedback (no JWT)
   app.use('/api/feedback', emailFeedbackRouter);

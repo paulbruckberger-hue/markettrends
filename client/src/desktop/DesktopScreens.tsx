@@ -24,8 +24,10 @@ import { ACCENTS, Theme } from '../lib/theme';
 import { AppSettings, AuthUser, SignalType, SourceTypeName, WatchItem } from '../types';
 import { DeskHeader, ViewSwitch } from './deskChrome';
 import AdminSections from '../components/AdminSections';
+import UpgradeSheet from '../components/UpgradeSheet';
 
 type Nav = (name: string, params?: Record<string, unknown>) => void;
+const PLAN_LABEL: Record<string, string> = { free: 'Gratis', plus: 'Plus', pro: 'Pro' };
 const PALETTE = ['#1d9bf0', '#7c5cff', '#00ba7c', '#f59e0b', '#f4212e', '#22d3ee'];
 
 // ════════════════════════════════════════ FEED ════════════════════════════════════════
@@ -987,6 +989,10 @@ export function DeskSettings({ theme, setTheme, accent, setAccent, me, onLogout,
   const update = useUpdateSettings();
   const set = (patch: Parameters<typeof update.mutate>[0]) => update.mutate(patch);
   const tgLink = s?.telegram_bot_username && me ? `https://t.me/${s.telegram_bot_username}?start=${me.id}` : null;
+  const [showUpgrade, setShowUpgrade] = useState(false);
+  const ent = me?.entitlements;
+  const planLabel = PLAN_LABEL[me?.plan ?? 'free'] ?? 'Gratis';
+  const planSub = ent ? `${planLabel} · ${ent.used}/${ent.unlimited ? '∞' : ent.quota} Keywords` : planLabel;
   return (
     <>
       <DeskHeader title="Einstellungen" />
@@ -995,9 +1001,15 @@ export function DeskSettings({ theme, setTheme, accent, setAccent, me, onLogout,
           <UserCircle name={me?.username ?? '?'} size={56} />
           <div style={{ flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ fontWeight: 800, fontSize: 17 }}>{me?.username ?? 'Konto'}</span><Verified size={15} /></div>
-            <div style={{ color: 'var(--text-3)', fontSize: 13.5 }}>{me?.email || (me?.role === 'admin' ? 'Administrator' : 'Pro')}</div>
+            <div style={{ color: 'var(--text-3)', fontSize: 13.5 }}>{me?.email || (me?.role === 'admin' ? 'Administrator' : planLabel)}</div>
           </div>
         </div>
+        <div className="hr" />
+
+        <SectionLabel>Tarif &amp; Abrechnung</SectionLabel>
+        <SetRow icon="bolt" title={`Tarif: ${planLabel}`} sub={planSub}
+          right={<span style={{ color: 'var(--accent)', fontSize: 12.5, fontWeight: 700 }}>{me?.plan && me.plan !== 'free' ? 'Verwalten →' : 'Upgrade →'}</span>}
+          onClick={() => setShowUpgrade(true)} />
         <div className="hr" />
 
         <SectionLabel>Darstellung</SectionLabel>
@@ -1075,6 +1087,7 @@ export function DeskSettings({ theme, setTheme, accent, setAccent, me, onLogout,
         <SetRow icon="logout" title="Abmelden" color="var(--neg)" onClick={onLogout} />
         <div style={{ textAlign: 'center', color: 'var(--text-3)', fontSize: 12, padding: 20 }}>Nicheletter.ai · v2.0 — Desktop</div>
       </div>
+      <UpgradeSheet open={showUpgrade} onClose={() => setShowUpgrade(false)} />
     </>
   );
 }

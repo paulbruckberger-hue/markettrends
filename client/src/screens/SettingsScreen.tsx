@@ -4,6 +4,9 @@ import { Icon, IconName } from '../components/Icon';
 import { ACCENTS, Theme } from '../lib/theme';
 import { useSettings, useUpdateSettings, useTestWhatsapp } from '../hooks/useSettings';
 import { AppSettings, AuthUser } from '../types';
+import UpgradeSheet from '../components/UpgradeSheet';
+
+const PLAN_LABEL: Record<string, string> = { free: 'Gratis', plus: 'Plus', pro: 'Pro' };
 
 type Nav = (name: string, params?: Record<string, unknown>) => void;
 
@@ -142,6 +145,13 @@ export default function SettingsScreen({ theme, setTheme, accent, setAccent, bac
   const update = useUpdateSettings();
   const set = (patch: Parameters<typeof update.mutate>[0]) => update.mutate(patch);
   const tgLink = s?.telegram_bot_username && me ? `https://t.me/${s.telegram_bot_username}?start=${me.id}` : null;
+  const [showUpgrade, setShowUpgrade] = useState(false);
+
+  const ent = me?.entitlements;
+  const planLabel = PLAN_LABEL[me?.plan ?? 'free'] ?? 'Gratis';
+  const planSub = ent
+    ? `${planLabel} · ${ent.used}/${ent.unlimited ? '∞' : ent.quota} Keywords`
+    : planLabel;
 
   return (
     <>
@@ -153,9 +163,15 @@ export default function SettingsScreen({ theme, setTheme, accent, setAccent, bac
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <span style={{ fontWeight: 800, fontSize: 16 }}>{me?.username ?? 'Konto'}</span><Verified size={15} />
             </div>
-            <div style={{ color: 'var(--text-3)', fontSize: 13 }}>{me?.email || (me?.role === 'admin' ? 'Administrator' : 'Pro')}</div>
+            <div style={{ color: 'var(--text-3)', fontSize: 13 }}>{me?.email || (me?.role === 'admin' ? 'Administrator' : planLabel)}</div>
           </div>
         </div>
+        <div className="hr" />
+
+        <SectionLabel>Tarif &amp; Abrechnung</SectionLabel>
+        <Row icon="bolt" title={`Tarif: ${planLabel}`} sub={planSub}
+          right={<span style={{ color: 'var(--accent)', fontSize: 12.5, fontWeight: 700 }}>{me?.plan && me.plan !== 'free' ? 'Verwalten →' : 'Upgrade →'}</span>}
+          onClick={() => setShowUpgrade(true)} />
         <div className="hr" />
 
         <SectionLabel>Darstellung</SectionLabel>
@@ -235,6 +251,7 @@ export default function SettingsScreen({ theme, setTheme, accent, setAccent, bac
         <Row icon="logout" title="Abmelden" color="var(--neg)" onClick={onLogout} />
         <div style={{ textAlign: 'center', color: 'var(--text-3)', fontSize: 12, padding: 16 }}>Nicheletter.ai · v2.0</div>
       </div>
+      <UpgradeSheet open={showUpgrade} onClose={() => setShowUpgrade(false)} />
     </>
   );
 }

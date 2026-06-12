@@ -55,6 +55,13 @@ export const config = {
   gcpProjectId: optional('GCP_PROJECT_ID'),
   gcpRegion: optional('GCP_REGION', 'europe-west1'),
   collectorJobName: optional('COLLECTOR_JOB_NAME', 'markttrends-collector'),
+
+  // Stripe (Abo-Bezahlung). Fehlen die Keys, sind die Billing-Endpunkte
+  // deaktiviert (App läuft weiter, Upgrade meldet „noch nicht aktiviert").
+  stripeSecretKey: optional('STRIPE_SECRET_KEY'),
+  stripeWebhookSecret: optional('STRIPE_WEBHOOK_SECRET'),
+  stripePricePlus: optional('STRIPE_PRICE_PLUS'),   // Stripe Price-ID für €4,99
+  stripePricePro: optional('STRIPE_PRICE_PRO'),     // Stripe Price-ID für €9,99
 } as const;
 
 export const isProd = config.nodeEnv === 'production';

@@ -19,6 +19,7 @@ import ClustersScreen from './screens/ClustersScreen';
 import ComposeSheet from './screens/ComposeSheet';
 import Onboarding from './screens/Onboarding';
 import AdminScreen from './screens/AdminScreen';
+import QuotaUpgradeListener from './components/QuotaUpgradeListener';
 
 const TAB_ROUTES = ['feed', 'explore', 'watchlist', 'analytics'];
 const CARD_KEY = 'nl_card';
@@ -112,6 +113,7 @@ export default function AppShell() {
       )}
       {compose && <ComposeSheet onClose={() => setCompose(false)} flash={flash} />}
       {toast && <Toast msg={toast} />}
+      <QuotaUpgradeListener />
     </div>
   );
 }

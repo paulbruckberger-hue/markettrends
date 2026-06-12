@@ -8,6 +8,7 @@ import { useWatchlist } from '../hooks/useWatchlist';
 import { DisplayItem } from '../lib/presenter';
 import { AuthUser } from '../types';
 import Onboarding from '../screens/Onboarding';
+import QuotaUpgradeListener from '../components/QuotaUpgradeListener';
 import { ComposeModal } from './deskChrome';
 import { RightRail } from './RightRail';
 import {
@@ -175,6 +176,7 @@ export default function DesktopShell() {
       </div>
       {compose && <ComposeModal onClose={() => setCompose(false)} flash={flash} />}
       {toast && <DeskToast msg={toast} />}
+      <QuotaUpgradeListener />
     </div>
   );
 }
