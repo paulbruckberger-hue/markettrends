@@ -118,18 +118,29 @@ export function mapLinkedInPost(p: LiPost, sourceType: SourceTypeName, prefilter
   };
 }
 
-/** Map lookbackDays to Apify's postedLimit string. */
-function toPostedLimit(lookbackDays?: number): string {
-  if (!lookbackDays || lookbackDays <= 7) return 'week';
+/**
+ * Map an explicit lookback window (days) to one of the actor's accepted
+ * `postedLimit` enum values ('24h' | 'week' | 'month'). Used for manual lookback /
+ * backfill runs. The recurring scheduled run passes '24h' directly (see collector)
+ * so it only ever pulls the last day's posts instead of re-paying for a full week.
+ */
+export function toPostedLimit(lookbackDays: number): string {
+  if (lookbackDays <= 1) return '24h';
+  if (lookbackDays <= 7) return 'week';
   return 'month';
 }
 
-/** Topic search: posts matching a keyword. Default: last week, up to 25 posts. */
-export async function fetchLinkedInPosts(query: string, lookbackDays?: number, limit = 25): Promise<SourceArticle[]> {
+/**
+ * Topic search: posts matching a keyword. `postedLimit` is an Apify enum value
+ * ('24h', 'week', 'month', …). The actor charges per scraped post, so the window
+ * must be kept tight — a 24h window on a daily run avoids re-scraping (and
+ * re-paying for) posts already collected on previous runs.
+ */
+export async function fetchLinkedInPosts(query: string, postedLimit: string, limit = 25): Promise<SourceArticle[]> {
   const items = await runActorSync<LiPost>(LINKEDIN_POST_ACTOR, {
     searchQueries: [query],
     maxPosts: limit,
-    postedLimit: toPostedLimit(lookbackDays),
+    postedLimit,
     sortBy: 'date',
     profileScraperMode: 'short',
     startPage: 1,

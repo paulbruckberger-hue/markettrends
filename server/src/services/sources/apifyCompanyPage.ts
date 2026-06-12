@@ -14,8 +14,7 @@ function toCompanyUrl(companyLinkedinId: string): string {
  * Company-page posts: everything authored by the company. Marked prefiltered
  * (by definition on-topic, so no token pre-filter is applied).
  */
-export async function fetchCompanyPagePosts(companyLinkedinId: string, lookbackDays?: number, limit = 25): Promise<SourceArticle[]> {
-  const postedLimit = (!lookbackDays || lookbackDays <= 7) ? 'week' : 'month';
+export async function fetchCompanyPagePosts(companyLinkedinId: string, postedLimit: string, limit = 25): Promise<SourceArticle[]> {
   const items = await runActorSync<LiPost>(LINKEDIN_POST_ACTOR, {
     authorUrls: [toCompanyUrl(companyLinkedinId)],
     maxPosts: limit,

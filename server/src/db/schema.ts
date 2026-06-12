@@ -62,6 +62,11 @@ export const search_terms = pgTable('search_terms', {
 
   is_active: boolean('is_active').notNull().default(true),  // true wenn ≥1 aktives Abo
   last_run_at: timestamp('last_run_at'),
+  // Letzter LinkedIn-Scrape (Apify, kostenpflichtig pro Post). LinkedIn wird je
+  // Begriff höchstens 1×/Wiener-Kalendertag abgefragt (im 00:00-Lauf, vor dem
+  // 05:00-Newsletter), damit nicht alle 6h für dieselben Posts gezahlt wird.
+  // Google News läuft weiterhin im normalen 6h-Takt.
+  last_linkedin_run_at: timestamp('last_linkedin_run_at'),
   created_at: timestamp('created_at').defaultNow()
 }, (t) => ({
   // DEDUP-KERN: ein Suchbegriff existiert nur einmal pro (Typ, Query, Geo)

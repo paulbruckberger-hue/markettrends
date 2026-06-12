@@ -7,13 +7,22 @@ import { classify, ClassificationInput, RANK_PROMPT_VERSION } from './ai/classif
 import { generateAliases } from './aliases';
 import { getActiveAiConfig, loadTermFewShot, makePersonalizeContext, personalizeClassification } from './personalize';
 import { fetchGoogleNews } from './sources/googleNews';
-import { fetchLinkedInPosts } from './sources/apifyLinkedIn';
+import { fetchLinkedInPosts, toPostedLimit } from './sources/apifyLinkedIn';
 import { fetchCompanyPagePosts } from './sources/apifyCompanyPage';
 import { apifyEnabled } from './sources/apifyClient';
 import { fanOutBreaking } from './notifications';
 import { SourceArticle } from './sources/types';
 import { GeoFilter, WatchType } from '../types';
 import { getAppConfig, AppConfig } from '../lib/appConfig';
+
+// LinkedIn (Apify) is billed per scraped post, so it must not be re-pulled on
+// every 6h run. We key its cadence to the Vienna calendar day: 'YYYY-MM-DD' in
+// Europe/Vienna. The first scheduled run of each day (00:00, before the 05:00
+// newsletter) does the single daily LinkedIn scrape; later runs that day skip it.
+const VIENNA_TZ = 'Europe/Vienna';
+function viennaDayKey(d: Date): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: VIENNA_TZ }).format(d); // YYYY-MM-DD
+}
 
 export interface RunSummary {
   jobRunId: string;
@@ -31,8 +40,18 @@ function logSourceError(source: string, term: SearchTermRow, err: unknown): void
   console.error(`[collector] ${source} failed for "${term.query_display}":`, err instanceof Error ? err.message : err);
 }
 
+interface GatherOptions {
+  lookbackDays?: number;
+  /** Whether to query LinkedIn (Apify, paid) on this run — see collectForSearchTerm. */
+  includeLinkedIn: boolean;
+  /** Apify `postedLimit` window for LinkedIn ('24h' on scheduled runs). */
+  linkedinPostedLimit: string;
+  appCfg?: AppConfig;
+}
+
 /** Gather raw candidates from Google News + LinkedIn for a term. */
-async function gatherCandidates(term: SearchTermRow, lookbackDays?: number, appCfg?: AppConfig): Promise<SourceArticle[]> {
+async function gatherCandidates(term: SearchTermRow, opts: GatherOptions): Promise<SourceArticle[]> {
+  const { lookbackDays, includeLinkedIn, linkedinPostedLimit, appCfg } = opts;
   const out: SourceArticle[] = [];
   const cfg = term.sources_config;
   const geo = term.geo_filter as GeoFilter;
@@ -63,7 +82,7 @@ async function gatherCandidates(term: SearchTermRow, lookbackDays?: number, appC
     for (const al of allAliases) await gn(al.q, al.lang);  // each alias in its own edition
   }
 
-  if (cfg.linkedin_posts && apifyEnabled()) {
+  if (cfg.linkedin_posts && includeLinkedIn && apifyEnabled()) {
     // LinkedIn search is global (no language edition) → dedup by query only, so
     // identically-spelled translations don't trigger redundant Apify calls.
     const issued = new Set<string>();
@@ -71,15 +90,15 @@ async function gatherCandidates(term: SearchTermRow, lookbackDays?: number, appC
       const key = q.trim().toLowerCase();
       if (issued.has(key)) return;
       issued.add(key);
-      try { out.push(...await fetchLinkedInPosts(q, lookbackDays, liLimit)); }
+      try { out.push(...await fetchLinkedInPosts(q, linkedinPostedLimit, liLimit)); }
       catch (err) { logSourceError(`linkedin_posts${lang ? `[${lang}]` : ''}`, term, err); }
     };
     await li(term.query_display);
     for (const al of allAliases) await li(al.q, al.lang);
   }
 
-  if (cfg.linkedin_company_page && isCompany && term.company_linkedin_id && apifyEnabled()) {
-    try { out.push(...await fetchCompanyPagePosts(term.company_linkedin_id, lookbackDays, liLimit)); }
+  if (cfg.linkedin_company_page && isCompany && term.company_linkedin_id && includeLinkedIn && apifyEnabled()) {
+    try { out.push(...await fetchCompanyPagePosts(term.company_linkedin_id, linkedinPostedLimit, liLimit)); }
     catch (err) { logSourceError('linkedin_company_page', term, err); }
   }
 
@@ -146,7 +165,23 @@ export async function collectForSearchTerm(
       .limit(1);
     const contextHint = sub?.context_hint ?? null;
 
-    const candidates = await gatherCandidates(term, lookbackDays, appCfg);
+    // --- LinkedIn (Apify, paid) cadence -------------------------------------
+    // Scrape LinkedIn at most ONCE per Vienna day per term, on the day's first
+    // run (00:00 → before the 05:00 newsletter / morning briefing), with a 24h
+    // window. Manual / lookback runs always scrape — the user asked for it.
+    const collectedToday =
+      !!term.last_linkedin_run_at && viennaDayKey(term.last_linkedin_run_at) === viennaDayKey(new Date());
+    const includeLinkedIn = trigger === 'manual' || !collectedToday;
+    const linkedinPostedLimit =
+      lookbackDays ? toPostedLimit(lookbackDays)   // explicit backfill window
+      : trigger === 'scheduled' ? '24h'            // daily run → only the last day
+      : 'week';                                    // manual "Jetzt abrufen" → last week
+    const wantsLinkedIn = apifyEnabled() && (
+      term.sources_config.linkedin_posts ||
+      (term.sources_config.linkedin_company_page && term.type === 'company' && !!term.company_linkedin_id)
+    );
+
+    const candidates = await gatherCandidates(term, { lookbackDays, includeLinkedIn, linkedinPostedLimit, appCfg });
     summary.articles_found = candidates.length;
 
     // Dedup within this run by content_hash (same URL from multiple sources).
@@ -273,7 +308,11 @@ export async function collectForSearchTerm(
       completed_at: new Date(),
     }).where(eq(job_runs.id, run.id));
 
-    await db.update(search_terms).set({ last_run_at: new Date() }).where(eq(search_terms.id, term.id));
+    await db.update(search_terms).set({
+      last_run_at: new Date(),
+      // Mark the daily LinkedIn scrape as done so the remaining 6h runs today skip it.
+      ...(includeLinkedIn && wantsLinkedIn ? { last_linkedin_run_at: new Date() } : {}),
+    }).where(eq(search_terms.id, term.id));
 
     // Instant push ONLY for rare "breaking" items (idempotent via telegram_sent).
     // Everything else is bundled into the once-daily briefing, never per-article.

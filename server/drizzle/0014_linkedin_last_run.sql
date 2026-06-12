@@ -1,0 +1,1 @@
+ALTER TABLE "search_terms" ADD COLUMN "last_linkedin_run_at" timestamp;
