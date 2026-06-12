@@ -1,7 +1,8 @@
 import { and, eq, gte, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { articles, classifications, settings, user_article_state, watch_items } from '../db/schema';
-import { InlineKeyboard, sendTelegramMessage, telegramEnabled } from './telegram';
+import { InlineKeyboard } from './telegram';
+import { pushConnected, sendPush } from './push';
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -55,8 +56,6 @@ function buildMessage(c: NotifClassification, watchName: string): string {
  * Never throws — a failed send is logged and skipped.
  */
 export async function fanOutBreaking(searchTermId: string): Promise<number> {
-  if (!telegramEnabled()) return 0;
-
   const cls = await db.select({
     id: classifications.id,
     rank: classifications.rank,
@@ -81,7 +80,7 @@ export async function fanOutBreaking(searchTermId: string): Promise<number> {
   let sent = 0;
   for (const sub of subs) {
     const [st] = await db.select().from(settings).where(eq(settings.user_id, sub.user_id));
-    if (!st || !st.telegram_connected || !st.telegram_chat_id || !st.breaking_alerts_enabled) continue;
+    if (!st || !st.breaking_alerts_enabled || !pushConnected(st)) continue;
 
     for (const c of cls) {
       const [state] = await db.select({ telegram_sent: user_article_state.telegram_sent })
@@ -90,7 +89,7 @@ export async function fanOutBreaking(searchTermId: string): Promise<number> {
       if (state?.telegram_sent) continue;
 
       try {
-        await sendTelegramMessage(st.telegram_chat_id, buildMessage({ ...c, breaking: true }, sub.display_name), buildPushKeyboard(c.id));
+        await sendPush(st, buildMessage({ ...c, breaking: true }, sub.display_name), buildPushKeyboard(c.id));
         await db.insert(user_article_state).values({
           user_id: sub.user_id,
           classification_id: c.id,

@@ -28,6 +28,12 @@ export function useTestTelegram() {
 export function useTestEmail() {
   return useMutation({ mutationFn: async () => (await api.post<TestResult>('/api/settings/test-email')).data });
 }
+export function useTestWhatsapp() {
+  return useMutation({
+    mutationFn: async (creds?: { whatsapp_phone: string; whatsapp_apikey: string }) =>
+      (await api.post<TestResult>('/api/settings/test-whatsapp', creds ?? {})).data,
+  });
+}
 export function useSendDigest() {
   return useMutation({ mutationFn: async () => (await api.post<{ sent: boolean; message: string }>('/api/digest/send')).data });
 }

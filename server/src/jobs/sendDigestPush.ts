@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { db, pool } from '../db/client';
 import { settings, users } from '../db/schema';
 import { sendDailyBriefing } from '../services/dailyDigest';
+import { pushConnected } from '../services/push';
 
 const TZ = 'Europe/Vienna';
 
@@ -16,8 +17,9 @@ function viennaYmdHour(d = new Date()): { ymd: string; hour: number } {
 
 /**
  * Daily-briefing job — meant to run HOURLY. Sends each user's curated daily
- * Telegram briefing when the current Vienna hour matches their chosen delivery
- * hour and they haven't already received it today. Idempotent per day.
+ * briefing on their chosen channel (Telegram or WhatsApp) when the current
+ * Vienna hour matches their chosen delivery hour and they haven't already
+ * received it today. Idempotent per day.
  */
 async function main(): Promise<void> {
   const { ymd, hour } = viennaYmdHour();
@@ -26,12 +28,17 @@ async function main(): Promise<void> {
     user_id: settings.user_id,
     push_hour: settings.daily_push_hour,
     last_sent: settings.daily_push_last_sent,
+    push_channel: settings.push_channel,
+    telegram_connected: settings.telegram_connected,
+    telegram_chat_id: settings.telegram_chat_id,
+    whatsapp_connected: settings.whatsapp_connected,
+    whatsapp_phone: settings.whatsapp_phone,
+    whatsapp_apikey: settings.whatsapp_apikey,
   })
     .from(settings)
     .innerJoin(users, eq(users.id, settings.user_id))
     .where(and(
       eq(settings.daily_push_enabled, true),
-      eq(settings.telegram_connected, true),
       eq(users.is_active, true),
     ));
 
@@ -39,6 +46,7 @@ async function main(): Promise<void> {
   let processed = 0;
   for (const r of recipients) {
     if (r.push_hour !== hour) continue;
+    if (!pushConnected(r)) continue;  // gewählter Kanal nicht verbunden
     if (r.last_sent && viennaYmdHour(new Date(r.last_sent)).ymd === ymd) continue; // already today
     processed++;
     try {

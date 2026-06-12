@@ -122,6 +122,10 @@ export interface AppSettings {
   ai_model_variant: string | null;
   telegram_chat_id: string | null;
   telegram_connected: boolean | null;
+  push_channel: 'telegram' | 'whatsapp';
+  whatsapp_phone: string | null;
+  whatsapp_apikey: string | null;
+  whatsapp_connected: boolean | null;
   notify_rank_1: boolean | null;
   notify_rank_2: boolean | null;
   daily_push_enabled: boolean | null;

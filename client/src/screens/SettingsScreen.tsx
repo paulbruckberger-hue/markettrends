@@ -1,9 +1,9 @@
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { Chevron, DetailBar, SectionLabel, UserCircle, Verified } from '../components/ui';
 import { Icon, IconName } from '../components/Icon';
 import { ACCENTS, Theme } from '../lib/theme';
-import { useSettings, useUpdateSettings } from '../hooks/useSettings';
-import { AuthUser } from '../types';
+import { useSettings, useUpdateSettings, useTestWhatsapp } from '../hooks/useSettings';
+import { AppSettings, AuthUser } from '../types';
 
 type Nav = (name: string, params?: Record<string, unknown>) => void;
 
@@ -67,6 +67,73 @@ function Pills<T extends string | number>({ options, value, onChange }: {
   );
 }
 
+const CALLMEBOT_NUMBER = '+34 644 51 95 23';
+
+function WhatsAppConfig({ s, set }: {
+  s: AppSettings; set: (patch: Partial<AppSettings>) => void;
+}) {
+  const [phone, setPhone] = useState(s.whatsapp_phone ?? '');
+  const [apikey, setApikey] = useState(s.whatsapp_apikey ?? '');
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const test = useTestWhatsapp();
+  // Bei Settings-Reload (z.B. nach Speichern) lokale Felder nachziehen.
+  useEffect(() => { setPhone(s.whatsapp_phone ?? ''); setApikey(s.whatsapp_apikey ?? ''); }, [s.whatsapp_phone, s.whatsapp_apikey]);
+
+  const dirty = phone.trim() !== (s.whatsapp_phone ?? '') || apikey.trim() !== (s.whatsapp_apikey ?? '');
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '10px 12px', borderRadius: 10, fontSize: 14,
+    border: '1px solid var(--border-strong)', background: 'var(--bg)', color: 'var(--text)', boxSizing: 'border-box',
+  };
+
+  const save = () => { setMsg(null); set({ whatsapp_phone: phone.trim(), whatsapp_apikey: apikey.trim() }); };
+  const runTest = async () => {
+    setMsg(null);
+    try {
+      const r = await test.mutateAsync({ whatsapp_phone: phone.trim(), whatsapp_apikey: apikey.trim() });
+      setMsg({ ok: r.ok, text: r.message });
+      if (r.ok && dirty) save();
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : 'Fehler' });
+    }
+  };
+
+  return (
+    <div style={{ padding: '4px 16px 14px' }}>
+      <div style={{ background: 'var(--accent-soft)', borderRadius: 12, padding: '12px 14px', fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.5, marginBottom: 12 }}>
+        <b style={{ color: 'var(--text)' }}>Einmalige Einrichtung (kostenlos via CallMeBot):</b><br />
+        1. Speichere <b>{CALLMEBOT_NUMBER}</b> als Kontakt und schreibe ihm in WhatsApp:
+        <i> „I allow callmebot to send me messages"</i><br />
+        2. Du bekommst sofort eine Antwort mit deinem <b>apikey</b>.<br />
+        3. Trage hier deine Nummer (international, z.B. +43…) und den apikey ein → Testen.<br />
+        <span style={{ color: 'var(--text-3)' }}>Hinweis: WhatsApp-Pushes kommen als Text mit Quell-Links – die 👍/👎-Buttons gibt es nur bei Telegram.</span>
+      </div>
+      <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-2)' }}>WhatsApp-Nummer</label>
+      <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+43 660 1234567"
+        style={{ ...inputStyle, margin: '5px 0 12px' }} />
+      <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-2)' }}>CallMeBot API-Key</label>
+      <input type="text" value={apikey} onChange={(e) => setApikey(e.target.value)} placeholder="z.B. 123456"
+        style={{ ...inputStyle, margin: '5px 0 12px' }} />
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button className="press" onClick={save} disabled={!dirty}
+          style={{ flex: 1, padding: '10px 0', borderRadius: 10, fontSize: 13.5, fontWeight: 700, cursor: dirty ? 'pointer' : 'default',
+            border: '1px solid var(--border-strong)', background: 'transparent', color: dirty ? 'var(--text)' : 'var(--text-3)' }}>
+          Speichern
+        </button>
+        <button className="press" onClick={runTest} disabled={test.isPending || !phone.trim() || !apikey.trim()}
+          style={{ flex: 1, padding: '10px 0', borderRadius: 10, fontSize: 13.5, fontWeight: 700, cursor: 'pointer',
+            border: 'none', background: 'var(--accent)', color: '#fff', opacity: test.isPending ? 0.6 : 1 }}>
+          {test.isPending ? 'Sende…' : 'Test senden'}
+        </button>
+      </div>
+      {msg && (
+        <div style={{ marginTop: 10, fontSize: 12.5, fontWeight: 600, color: msg.ok ? 'var(--pos)' : 'var(--neg, #e0245e)' }}>
+          {msg.ok ? '✓ ' : '⚠ '}{msg.text}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SettingsScreen({ theme, setTheme, accent, setAccent, back, me, onLogout, nav }: {
   theme: Theme; setTheme: (t: Theme) => void; accent: string; setAccent: (a: string) => void;
   back: () => void; me: AuthUser | undefined; onLogout: () => void; nav: Nav;
@@ -122,15 +189,24 @@ export default function SettingsScreen({ theme, setTheme, accent, setAccent, bac
         <div className="hr" />
 
         <SectionLabel>Benachrichtigungen</SectionLabel>
-        {s?.telegram_connected
-          ? <Row icon="bolt" title="Telegram" sub="Verbunden"
-              right={<span style={{ color: 'var(--pos)', fontSize: 12.5, fontWeight: 700 }}>Aktiv</span>} />
-          : tgLink
-            ? <Row icon="bolt" title="Telegram" sub="Tippen, um Push zu verbinden"
-                onClick={() => window.open(tgLink, '_blank', 'noopener')}
-                right={<span style={{ color: 'var(--accent)', fontSize: 12.5, fontWeight: 700 }}>Verbinden →</span>} />
-            : <Row icon="bolt" title="Telegram" sub="Nicht verfügbar"
-                right={<span style={{ color: 'var(--text-3)', fontSize: 12.5, fontWeight: 700 }}>Aus</span>} />}
+        <div style={{ fontSize: 13, color: 'var(--text-2)', fontWeight: 600, padding: '4px 16px 0' }}>Push-Kanal</div>
+        <Pills
+          options={[{ k: 'telegram' as const, label: 'Telegram' }, { k: 'whatsapp' as const, label: 'WhatsApp' }]}
+          value={s?.push_channel ?? 'telegram'} onChange={(c) => set({ push_channel: c })} />
+
+        {(s?.push_channel ?? 'telegram') === 'whatsapp'
+          ? (s
+              ? <WhatsAppConfig s={s} set={set} />
+              : null)
+          : s?.telegram_connected
+            ? <Row icon="bolt" title="Telegram" sub="Verbunden"
+                right={<span style={{ color: 'var(--pos)', fontSize: 12.5, fontWeight: 700 }}>Aktiv</span>} />
+            : tgLink
+              ? <Row icon="bolt" title="Telegram" sub="Tippen, um Push zu verbinden"
+                  onClick={() => window.open(tgLink, '_blank', 'noopener')}
+                  right={<span style={{ color: 'var(--accent)', fontSize: 12.5, fontWeight: 700 }}>Verbinden →</span>} />
+              : <Row icon="bolt" title="Telegram" sub="Nicht verfügbar"
+                  right={<span style={{ color: 'var(--text-3)', fontSize: 12.5, fontWeight: 700 }}>Aus</span>} />}
 
         <Row icon="bell" title="Tagesbriefing" sub={s?.daily_push_enabled ? `1× täglich · ${String(s.daily_push_hour ?? 8).padStart(2, '0')}:00 Uhr · Top 3–5` : 'Aus'}
           right={<Toggle on={!!s?.daily_push_enabled} onChange={(v) => set({ daily_push_enabled: v })} />} />

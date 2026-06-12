@@ -4,7 +4,7 @@ import { articles, classifications, settings, user_article_state, watch_items } 
 import { config } from '../config';
 import { generateText } from './ai/classifier';
 import { getActiveAiConfig } from './personalize';
-import { sendTelegramMessage, telegramEnabled } from './telegram';
+import { pushConnected, sendPush } from './push';
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -148,9 +148,8 @@ function buildMessage(date: string, lage: string, items: Candidate[]): string {
  * article's classifications telegram_sent so nothing repeats tomorrow.
  */
 export async function sendDailyBriefing(userId: string): Promise<number> {
-  if (!telegramEnabled()) return 0;
   const [st] = await db.select().from(settings).where(eq(settings.user_id, userId));
-  if (!st || !st.telegram_connected || !st.telegram_chat_id) return 0;
+  if (!st || !pushConnected(st)) return 0;
 
   const cands = await loadCandidates(userId);
   if (cands.length === 0) {
@@ -168,7 +167,7 @@ export async function sendDailyBriefing(userId: string): Promise<number> {
     const keyboard = /^https:\/\//.test(config.clientUrl)
       ? { inline_keyboard: [[{ text: '📲 Alle Meldungen im Feed', url: `${config.clientUrl}/feed` }]] }
       : undefined;
-    await sendTelegramMessage(st.telegram_chat_id, buildMessage(date, lage, chosen), keyboard);
+    await sendPush(st, buildMessage(date, lage, chosen), keyboard);
 
     const clsIds = chosen.flatMap((c) => c.cls_ids);
     for (let i = 0; i < clsIds.length; i += 50) {

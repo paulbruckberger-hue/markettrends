@@ -9,6 +9,7 @@ import { testClaude } from '../services/ai/claude';
 import { testGemini } from '../services/ai/gemini';
 import { testDeepseek } from '../services/ai/deepseek';
 import { sendTelegramMessage, telegramEnabled } from '../services/telegram';
+import { sendWhatsApp, whatsappConfigured } from '../services/whatsapp';
 import { sendTestEmail } from '../services/newsletter';
 
 export const settingsRouter = Router();
@@ -50,6 +51,9 @@ settingsRouter.put('/', async (req: AuthedRequest, res: Response) => {
   if (typeof b.daily_push_enabled === 'boolean') patch.daily_push_enabled = b.daily_push_enabled;
   if (Number.isInteger(b.daily_push_hour) && b.daily_push_hour >= 0 && b.daily_push_hour <= 23) patch.daily_push_hour = b.daily_push_hour;
   if (typeof b.breaking_alerts_enabled === 'boolean') patch.breaking_alerts_enabled = b.breaking_alerts_enabled;
+  if (b.push_channel === 'telegram' || b.push_channel === 'whatsapp') patch.push_channel = b.push_channel;
+  if (typeof b.whatsapp_phone === 'string') patch.whatsapp_phone = b.whatsapp_phone.trim() || null;
+  if (typeof b.whatsapp_apikey === 'string') patch.whatsapp_apikey = b.whatsapp_apikey.trim() || null;
   if (['weekly', 'few', 'daily'].includes(b.newsletter_frequency)) patch.newsletter_frequency = b.newsletter_frequency;
   if (typeof b.newsletter_enabled === 'boolean') patch.newsletter_enabled = b.newsletter_enabled;
   if (typeof b.newsletter_email === 'string') patch.newsletter_email = b.newsletter_email;
@@ -57,7 +61,13 @@ settingsRouter.put('/', async (req: AuthedRequest, res: Response) => {
   if (typeof b.newsletter_time === 'string') patch.newsletter_time = b.newsletter_time;
   if (b.language === 'de' || b.language === 'en') patch.language = b.language;
 
-  await ensureSettings(req.user!.id);
+  const current = await ensureSettings(req.user!.id);
+  // whatsapp_connected leitet sich aus den effektiven (gemergten) Werten ab.
+  if ('whatsapp_phone' in patch || 'whatsapp_apikey' in patch) {
+    const phone = 'whatsapp_phone' in patch ? (patch.whatsapp_phone as string | null) : current.whatsapp_phone;
+    const apikey = 'whatsapp_apikey' in patch ? (patch.whatsapp_apikey as string | null) : current.whatsapp_apikey;
+    patch.whatsapp_connected = whatsappConfigured(phone, apikey);
+  }
   const [updated] = await db.update(settings).set(patch).where(eq(settings.user_id, req.user!.id)).returning();
   res.json(updated);
 });
@@ -87,6 +97,24 @@ settingsRouter.post('/test-telegram', async (req: AuthedRequest, res: Response) 
   }
   try {
     await sendTelegramMessage(st.telegram_chat_id, '✅ <b>Test</b> – Telegram-Verbindung funktioniert.');
+    res.json({ ok: true, message: 'Test-Nachricht gesendet' });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: err instanceof Error ? err.message : 'Fehler' });
+  }
+});
+
+// POST /api/settings/test-whatsapp
+// Testet mit den gerade gesendeten Werten (falls vorhanden), sonst den gespeicherten.
+settingsRouter.post('/test-whatsapp', async (req: AuthedRequest, res: Response) => {
+  const st = await ensureSettings(req.user!.id);
+  const phone = (typeof req.body?.whatsapp_phone === 'string' && req.body.whatsapp_phone.trim()) || st.whatsapp_phone;
+  const apikey = (typeof req.body?.whatsapp_apikey === 'string' && req.body.whatsapp_apikey.trim()) || st.whatsapp_apikey;
+  if (!whatsappConfigured(phone, apikey)) {
+    res.status(400).json({ ok: false, message: 'Telefonnummer und CallMeBot-API-Key erforderlich' });
+    return;
+  }
+  try {
+    await sendWhatsApp(phone!, apikey!, '✅ *Test* – WhatsApp-Verbindung funktioniert.');
     res.json({ ok: true, message: 'Test-Nachricht gesendet' });
   } catch (err) {
     res.status(500).json({ ok: false, message: err instanceof Error ? err.message : 'Fehler' });

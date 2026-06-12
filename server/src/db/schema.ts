@@ -216,6 +216,17 @@ export const settings = pgTable('settings', {
   notify_rank_1: boolean('notify_rank_1').default(true),
   notify_rank_2: boolean('notify_rank_2').default(false),
 
+  // Push-Kanal pro User: 'telegram' (Default, mit interaktiven Buttons) oder
+  // 'whatsapp' (via CallMeBot, kostenlos, aber ohne Buttons). Die WhatsApp-
+  // Felder werden über die Settings-Maske befüllt; whatsapp_connected wird true,
+  // sobald Telefonnummer + CallMeBot-API-Key hinterlegt sind. Später ist ein
+  // Wechsel auf die offizielle WhatsApp-Cloud-API allein in services/whatsapp.ts
+  // möglich, ohne dieses Schema zu ändern.
+  push_channel: text('push_channel').notNull().default('telegram'),  // 'telegram' | 'whatsapp'
+  whatsapp_phone: text('whatsapp_phone'),
+  whatsapp_apikey: text('whatsapp_apikey'),
+  whatsapp_connected: boolean('whatsapp_connected').notNull().default(false),
+
   // Tagesbriefing (1×/Tag kuratierter Push statt Sofort-Push pro Artikel) +
   // seltene Breaking-Sofort-Alerts. Stunde = lokale Versandstunde (Europe/Vienna).
   daily_push_enabled: boolean('daily_push_enabled').notNull().default(true),
