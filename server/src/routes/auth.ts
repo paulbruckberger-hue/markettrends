@@ -6,6 +6,7 @@ import { users, watch_items, settings } from '../db/schema';
 import { authMiddleware, signToken, AuthedRequest } from '../middleware/auth';
 import { entitlementsFor } from '../lib/entitlements';
 import { findValidInvite, markInviteAccepted } from '../services/invites';
+import { verifyMagicLoginToken } from '../lib/magicToken';
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -145,6 +146,23 @@ authRouter.post('/accept-invite', async (req, res: Response) => {
   await markInviteAccepted(invite.id);
   const authUser = { id: created.id, username: created.username, role: created.role };
   res.status(201).json({ token: signToken(authUser), user: authUser });
+});
+
+// POST /api/auth/magic — passwortloser Login per signiertem Token (aus dem Bot)
+authRouter.post('/magic', async (req, res: Response) => {
+  const token = typeof req.body?.token === 'string' ? req.body.token : '';
+  const userId = verifyMagicLoginToken(token);
+  if (!userId) {
+    res.status(400).json({ error: 'Link ungültig oder abgelaufen' });
+    return;
+  }
+  const [user] = await db.select().from(users).where(eq(users.id, userId));
+  if (!user || !user.is_active) {
+    res.status(401).json({ error: 'Konto nicht verfügbar' });
+    return;
+  }
+  const authUser = { id: user.id, username: user.username, role: user.role };
+  res.json({ token: signToken(authUser), user: authUser });
 });
 
 // POST /api/auth/logout (stateless — client drops the token)

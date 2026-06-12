@@ -8,8 +8,11 @@ import {
 } from '../services/telegram';
 import { buildPushKeyboard } from '../services/notifications';
 import { repersonalizeUserTerm } from '../services/personalize';
+import { handleBotMessage } from '../services/botRegistration';
 
 export const webhookRouter = Router();
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -43,34 +46,46 @@ webhookRouter.post('/telegram', async (req: Request, res: Response) => {
   }
 });
 
-/** /start <userId> connects a Telegram chat to an app account. */
+/**
+ * Eingehende Telegram-Nachricht. Zwei Fälle:
+ *  1) `/start <userId>` mit gültiger User-UUID → bestehendes Konto mit dem Chat
+ *     verknüpfen (App-Button „Mit Telegram verbinden").
+ *  2) Sonst → kanal-offene Registrierung/Konversation: ein Konto entsteht direkt
+ *     im Chat (services/botRegistration), inkl. passwortlosem Web-Login-Link.
+ */
 async function handleMessage(msg: any): Promise<void> {
   const text: string = msg?.text ?? '';
   const chatId = msg?.chat?.id;
-  if (!chatId || !text.startsWith('/start')) return;
+  if (!chatId) return;
+  const chat = String(chatId);
 
-  const payload = text.split(/\s+/)[1]?.trim();
-  if (!payload) {
-    await sendTelegramMessage(String(chatId), 'Bitte verbinde Telegram über die Markttrends-Scouting-App.');
-    return;
+  const payload = text.startsWith('/start') ? text.split(/\s+/)[1]?.trim() : undefined;
+  if (payload && UUID_RE.test(payload)) {
+    const [user] = await db.select().from(users).where(eq(users.id, payload));
+    if (user) {
+      await db.insert(settings).values({
+        user_id: user.id,
+        telegram_chat_id: chat,
+        telegram_connected: true,
+      }).onConflictDoUpdate({
+        target: settings.user_id,
+        set: { telegram_chat_id: chat, telegram_connected: true, updated_at: new Date() },
+      });
+      await sendTelegramMessage(chat, '✅ <b>Verbunden!</b> Du erhältst ab jetzt Push-Benachrichtigungen für wichtige Markttrends.');
+      return;
+    }
   }
 
-  const [user] = await db.select().from(users).where(eq(users.id, payload));
-  if (!user) {
-    await sendTelegramMessage(String(chatId), '❌ Ungültiger Verbindungscode.');
-    return;
-  }
-
-  await db.insert(settings).values({
-    user_id: user.id,
-    telegram_chat_id: String(chatId),
-    telegram_connected: true,
-  }).onConflictDoUpdate({
-    target: settings.user_id,
-    set: { telegram_chat_id: String(chatId), telegram_connected: true, updated_at: new Date() },
+  await handleBotMessage({
+    channel: 'telegram',
+    chatId: chat,
+    text,
+    profile: {
+      firstName: msg?.from?.first_name,
+      telegramUserId: msg?.from?.id != null ? String(msg.from.id) : undefined,
+    },
+    reply: (html) => sendTelegramMessage(chat, html),
   });
-
-  await sendTelegramMessage(String(chatId), '✅ <b>Verbunden!</b> Du erhältst ab jetzt Push-Benachrichtigungen für wichtige Markttrends.');
 }
 
 /** Inline-button taps: "Mehr Infos" + 👍/👎 relevance feedback. */
