@@ -9,6 +9,7 @@
 - **Cloud Run Service** `markttrends-api` – serviert API **und** das React-Frontend (eine URL).
 - **Cloud Run Jobs** `markttrends-collector`, `markttrends-newsletter`, `markttrends-digest` (alle mit `CLIENT_URL` gesetzt — nötig für Links/Buttons!).
 - **Cloud Scheduler** `markttrends-collect` (alle 6h), `markttrends-newsletter` (täglich 05:00), `markttrends-digest` (**stündlich**, sendet Tagesbriefing zur jeweiligen User-Stunde) — alle Europe/Vienna.
+- **LinkedIn-Scrape-Takt (Kostenbremse, Migration 0014):** Apify-LinkedIn (Posts + Company-Page) wird je Suchbegriff nur **1×/Wiener-Kalendertag** abgefragt — im ersten Collect-Lauf des Tages (00:00, vor dem 05:00-Newsletter), Fenster **`24h`** statt vorher `week`. Steuerung via `search_terms.last_linkedin_run_at`. Google News läuft weiter im 6h-Takt. Manuelle/Lookback-Läufe scrapen LinkedIn immer (eigene Fenster). Verhindert, dass alle 6h dieselben Posts neu gescrapt & bezahlt werden.
 - **Secrets:** DATABASE_URL, JWT_SECRET, ANTHROPIC_API_KEY, TELEGRAM_WEBHOOK_SECRET,
   **TELEGRAM_BOT_TOKEN, APIFY_API_TOKEN, GEMINI_API_KEY, DEEPSEEK_API_KEY, SMTP_PASS** (alle gesetzt & live).
 - **Telegram:** Bot **@Nicheletterbot** live — Token + `TELEGRAM_BOT_USERNAME=Nicheletterbot` gesetzt (API + Collector),
