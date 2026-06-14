@@ -38,37 +38,37 @@ function DemoCard({ item }: { item: Item }) {
 function genResults(term: string): Item[] {
   const t = term.trim();
   return [
-    { rank: 1, signal: 'Finanzierung', sigColor: '#00ba7c', title: `${t}-Startup sichert sich Millionenrunde — Runde überzeichnet`, src: SRC.news, time: 'vor 1 Std' },
-    { rank: 1, signal: 'Regulatorik', sigColor: '#f4212e', title: `Neue EU-Vorgaben treffen ${t}-Anbieter — Frist Q1 2026`, src: SRC.room, time: 'vor 4 Std' },
-    { rank: 2, signal: 'Produktstart', sigColor: '#00ba7c', title: `Marktführer kündigt ${t}-Produktoffensive für Q3 an`, src: SRC.li, time: 'vor 6 Std' },
+    { rank: 1, signal: 'Finanzierung', sigColor: '#00ba7c', title: `${t}-Anbieter sichert sich Millionen-Finanzierung — die Runde ist deutlich überzeichnet`, src: SRC.news, time: 'vor 1 Std' },
+    { rank: 1, signal: 'Regulierung', sigColor: '#f4212e', title: `Neue EU-Vorgabe trifft ${t}-Anbieter — Anpassung bis Anfang 2026 nötig`, src: SRC.room, time: 'vor 4 Std' },
+    { rank: 2, signal: 'Produktstart', sigColor: '#00ba7c', title: `Marktführer kündigt eine große ${t}-Produktoffensive an`, src: SRC.li, time: 'vor 6 Std' },
   ];
 }
 
 const STEPS_DETAIL = [
   {
-    num: 1, icon: '🎯', title: 'Nische eingeben', color: '#1d9bf0',
+    num: 1, icon: '🎯', title: 'Thema festlegen', color: '#1d9bf0',
     points: [
-      'Thema oder Unternehmen als Stichwort anlegen (z. B. „Embedded Finance", „Revolut")',
-      'Geo-Filter wählen: Global, DACH oder Österreich',
-      'Mehrere Stichwörter parallel beobachten (je nach Plan)',
+      'Ein Thema oder Unternehmen als Stichwort anlegen (etwa „Embedded Finance" oder „Revolut")',
+      'Regionalen Fokus wählen: weltweit, DACH oder Österreich',
+      'Mehrere Themen gleichzeitig beobachten (je nach Tarif)',
     ],
   },
   {
-    num: 2, icon: '✨', title: 'KI sammelt & rankt', color: '#7c5cff',
+    num: 2, icon: '✨', title: 'Die KI wertet aus', color: '#7c5cff',
     points: [
-      'Automatische Suche in Google News, LinkedIn, RSS und Newsrooms',
-      'KI bewertet jedes Signal: P1 (Kritisch) · P2 (Relevant) · P3 (Kontext)',
-      'Signaltyp-Klassifikation: Funding, Launch, Regulatory, Personal …',
-      'Duplikate über alle Quellen werden zusammengeführt',
+      'Durchsucht rund um die Uhr News, LinkedIn, RSS und Branchen-Newsrooms',
+      'Gewichtet jede Meldung: kritisch, relevant oder nur Kontext',
+      'Ordnet sie nach Art des Ereignisses ein: Finanzierung, Produktstart, Regulierung, Personal …',
+      'Führt dieselbe Meldung aus mehreren Quellen zu einer zusammen',
     ],
   },
   {
-    num: 3, icon: '📬', title: 'Briefing erhalten', color: '#00ba7c',
+    num: 3, icon: '📬', title: 'Morgens informiert', color: '#00ba7c',
     points: [
-      '1× täglich kuratiertes Briefing in der App, per Telegram und per E-Mail',
-      'Breaking-Signale (P1) kommen sofort per Push',
-      '👍/👎 Feedback passt dein Ranking automatisch an',
-      'Wochentakt und Newsletter-Frequenz wählbar',
+      'Einmal täglich ein kuratiertes Briefing — in der App, per Telegram und per E-Mail',
+      'Wirklich Dringendes erreicht dich sofort per Benachrichtigung',
+      'Mit 👍/👎 wird dein Briefing von Tag zu Tag genauer',
+      'Frequenz frei wählbar — täglich oder wöchentlich',
     ],
   },
 ];
@@ -95,11 +95,11 @@ export default function HowItWorksPage() {
         <div className="lp-wrap">
           <span className="lp-kicker">So funktioniert's</span>
           <h1 className="lp-h2" style={{ fontSize: 'clamp(36px,5.5vw,62px)', marginTop: 14 }}>
-            In 60 Sekunden vom Stichwort<br />zum gerankten Briefing.
+            In unter einer Minute<br />vom Stichwort zum Briefing.
           </h1>
           <p className="lp-lead" style={{ margin: '18px auto 0', textAlign: 'center' }}>
-            Kein Setup, keine Filter-Bastelei. Du nennst deine Nische —
-            die KI übernimmt das Aufspüren, Bewerten und Zusammenfassen.
+            Kein Einrichten, kein Filter-Basteln. Du nennst dein Thema —
+            den Rest übernimmt die KI: aufspüren, gewichten, zusammenfassen.
           </p>
         </div>
       </section>
@@ -146,12 +146,12 @@ export default function HowItWorksPage() {
         <div className="lp-wrap">
           <Reveal>
             <div className="lp-try">
-              <span className="lp-kicker">Live ausprobieren</span>
+              <span className="lp-kicker">Gleich ausprobieren</span>
               <h2 className="lp-h2" style={{ fontSize: 'clamp(24px,3.2vw,38px)' }}>
-                Gib deine Nische ein — sieh, was reinkommt.
+                Gib deine Nische ein — und sieh, was reinkommt.
               </h2>
               <p style={{ color: 'var(--ink-2)', fontSize: 15, marginTop: 10 }}>
-                Vorschau-Demo · dein echtes Briefing erhältst du nach der kostenlosen Anmeldung.
+                Vorschau · dein echtes Briefing bekommst du nach der kostenlosen Anmeldung.
               </p>
               <form className="lp-try-bar" onSubmit={run}>
                 <input className="lp-field" style={{ flex: 1 }} value={term}
@@ -191,10 +191,10 @@ export default function HowItWorksPage() {
           <Reveal>
             <div className="lp-cta">
               <h2 className="lp-h2" style={{ maxWidth: 600, margin: '0 auto' }}>
-                Bereit, deine Nische zu beobachten?
+                Bereit, deine Nische im Blick zu behalten?
               </h2>
               <p className="lp-lead" style={{ margin: '14px auto 26px', textAlign: 'center' }}>
-                Kostenlos starten — keine Kreditkarte nötig.
+                Jetzt kostenlos starten — ohne Kreditkarte.
               </p>
               <SignupCard compact />
             </div>

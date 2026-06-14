@@ -123,7 +123,7 @@ export default function LandingLayout({ children }: { children: ReactNode }) {
 
   const NAV_LINKS = [
     { to: '/how-it-works', label: 'So funktioniert\'s' },
-    { to: '/features', label: 'Features' },
+    { to: '/features', label: 'Funktionen' },
     { to: '/pricing', label: 'Preise' },
   ];
 
@@ -176,7 +176,7 @@ export default function LandingLayout({ children }: { children: ReactNode }) {
             </Link>
             <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap' }}>
               <Link to="/how-it-works">So funktioniert's</Link>
-              <Link to="/features">Features</Link>
+              <Link to="/features">Funktionen</Link>
               <Link to="/pricing">Preise</Link>
               <Link to="/login" style={{ fontWeight: 700, color: 'var(--acc)' }}>Anmelden</Link>
               <Link to="/register">Kostenlos starten</Link>

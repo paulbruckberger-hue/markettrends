@@ -348,9 +348,7 @@ input, textarea { font-size: 16px; } /* prevents iOS zoom on focus */
   background: linear-gradient(180deg, #0f1820, #0a1017);
   border: 1px solid var(--line-strong);
   box-shadow: 0 50px 110px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05);
-  animation: lpFloat 7s ease-in-out infinite;
 }
-@media (max-width: 940px) { .lp-brief { animation: none; } }
 .lp-brief::before {
   content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; z-index: 3;
   background: linear-gradient(90deg, var(--acc), #7c5cff, #00ba7c);
@@ -379,7 +377,8 @@ input, textarea { font-size: 16px; } /* prevents iOS zoom on focus */
 .lp-niche-go:hover { background: var(--accent-press, #1a8cd8); }
 .lp-niche-go:active { transform: scale(0.92); }
 
-.lp-brief-body { padding: 16px 18px 18px; min-height: 348px; }
+/* fixed height so the panel never jumps as the niche/content changes */
+.lp-brief-body { padding: 16px 18px 18px; height: 452px; overflow: hidden; }
 .lp-brief-h { font-family: var(--serif); font-size: 21px; font-weight: 700; letter-spacing: -0.2px; line-height: 1.2; margin: 2px 0 16px; color: var(--ink); }
 .lp-brief-h b { color: var(--acc); font-weight: 700; }
 

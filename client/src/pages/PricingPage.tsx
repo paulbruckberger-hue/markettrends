@@ -4,54 +4,54 @@ import LandingLayout, { Reveal, SignupCard } from '../components/LandingLayout';
 
 const PLANS = [
   {
-    name: 'GRATIS', price: '0 €', per: '', sub: 'Zum Reinschnuppern', featured: false, cta: 'Kostenlos starten',
+    name: 'GRATIS', price: '0 €', per: '', sub: 'Zum Ausprobieren', featured: false, cta: 'Kostenlos starten',
     features: [
-      { yes: true, text: '1 Stichwort beobachten' },
-      { yes: true, text: 'Alle 4 Quellen (News, LinkedIn, RSS, Newsroom)' },
-      { yes: true, text: 'KI-Ranking P1 · P2 · P3' },
+      { yes: true, text: '1 Thema im Blick' },
+      { yes: true, text: 'Alle Quellen: News, LinkedIn, RSS, Newsrooms' },
+      { yes: true, text: 'KI-Gewichtung nach Wichtigkeit' },
       { yes: true, text: 'Tägliches Briefing in der App' },
-      { yes: false, text: 'Telegram-Push' },
-      { yes: false, text: 'E-Mail-Newsletter' },
-      { yes: false, text: 'Personalisierung per Feedback' },
-      { yes: false, text: 'Wettbewerbsanalyse' },
-      { yes: false, text: 'Themen-Cluster & Analytics' },
+      { yes: false, text: 'Push per Telegram' },
+      { yes: false, text: 'Briefing per E-Mail' },
+      { yes: false, text: 'Passt sich dir an' },
+      { yes: false, text: 'Wettbewerber im Blick' },
+      { yes: false, text: 'Themen gebündelt & Auswertungen' },
     ],
   },
   {
-    name: 'PLUS', price: '4,99 €', per: '/ Monat', sub: 'Für aktive Marktbeobachter', featured: true, cta: 'Plus starten',
+    name: 'PLUS', price: '4,99 €', per: '/ Monat', sub: 'Für aktive Marktbeobachter', featured: true, cta: 'Plus wählen',
     features: [
-      { yes: true, text: '3 Stichwörter beobachten' },
-      { yes: true, text: 'Alle 4 Quellen' },
-      { yes: true, text: 'KI-Ranking P1 · P2 · P3' },
+      { yes: true, text: '3 Themen im Blick' },
+      { yes: true, text: 'Alle Quellen' },
+      { yes: true, text: 'KI-Gewichtung nach Wichtigkeit' },
       { yes: true, text: 'Tägliches Briefing in der App' },
-      { yes: true, text: 'Telegram-Push mit 👍/👎' },
-      { yes: true, text: 'E-Mail-Newsletter' },
-      { yes: true, text: 'Personalisierung per Feedback' },
-      { yes: false, text: 'Wettbewerbsanalyse' },
-      { yes: false, text: 'Themen-Cluster & Analytics' },
+      { yes: true, text: 'Push per Telegram (mit Bewertung)' },
+      { yes: true, text: 'Briefing per E-Mail' },
+      { yes: true, text: 'Passt sich dir an' },
+      { yes: false, text: 'Wettbewerber im Blick' },
+      { yes: false, text: 'Themen gebündelt & Auswertungen' },
     ],
   },
   {
-    name: 'PRO', price: '9,99 €', per: '/ Monat', sub: 'Für volle Marktabdeckung', featured: false, cta: 'Pro starten',
+    name: 'PRO', price: '9,99 €', per: '/ Monat', sub: 'Für den vollen Überblick', featured: false, cta: 'Pro wählen',
     features: [
-      { yes: true, text: '10 Stichwörter beobachten' },
-      { yes: true, text: 'Alle 4 Quellen' },
-      { yes: true, text: 'KI-Ranking P1 · P2 · P3' },
+      { yes: true, text: '10 Themen im Blick' },
+      { yes: true, text: 'Alle Quellen' },
+      { yes: true, text: 'KI-Gewichtung nach Wichtigkeit' },
       { yes: true, text: 'Tägliches Briefing in der App' },
-      { yes: true, text: 'Telegram-Push mit 👍/👎' },
-      { yes: true, text: 'E-Mail-Newsletter' },
-      { yes: true, text: 'Personalisierung per Feedback' },
-      { yes: true, text: 'Wettbewerbsanalyse' },
-      { yes: true, text: 'Themen-Cluster & Analytics' },
+      { yes: true, text: 'Push per Telegram (mit Bewertung)' },
+      { yes: true, text: 'Briefing per E-Mail' },
+      { yes: true, text: 'Passt sich dir an' },
+      { yes: true, text: 'Wettbewerber im Blick' },
+      { yes: true, text: 'Themen gebündelt & Auswertungen' },
     ],
   },
 ];
 
 const FAQ = [
-  { q: 'Brauche ich eine Kreditkarte für den Gratis-Plan?', a: 'Nein. Der Gratis-Plan ist dauerhaft kostenlos und erfordert keine Zahlungsinformationen. Du kannst jederzeit upgraden, wenn du mehr Stichwörter beobachten möchtest.' },
-  { q: 'Kann ich jederzeit kündigen?', a: 'Ja, monatlich kündbar — ohne Kündigungsfristen. Dein Plan läuft bis zum Ende des bezahlten Zeitraums und wechselt dann automatisch auf Gratis.' },
-  { q: 'Was passiert mit meinen Daten, wenn ich den Plan wechsle?', a: 'Deine Stichwörter, Beobachtungen und Artikel-History bleiben erhalten. Beim Downgrade werden überzählige aktive Stichwörter pausiert (du wählst, welche bleiben).' },
-  { q: 'Kann ich auch Unternehmen statt Themen beobachten?', a: 'Ja — Nicheletter unterscheidet zwischen Themen-Keywords (z. B. „Embedded Finance") und Unternehmens-Keywords (z. B. „Revolut"). Die Wettbewerbsanalyse ist ab dem Plus-Plan verfügbar.' },
+  { q: 'Brauche ich für den Gratis-Tarif eine Kreditkarte?', a: 'Nein. Der Gratis-Tarif ist dauerhaft kostenlos und verlangt keine Zahlungsdaten. Du kannst jederzeit wechseln, wenn du mehr Themen gleichzeitig im Blick behalten möchtest.' },
+  { q: 'Kann ich jederzeit kündigen?', a: 'Ja, monatlich kündbar — ohne Frist und ohne Haken. Dein Tarif läuft bis zum Ende des bezahlten Zeitraums und wechselt danach automatisch auf Gratis.' },
+  { q: 'Was passiert mit meinen Daten, wenn ich den Tarif wechsle?', a: 'Deine Themen, Beobachtungen und der bisherige Verlauf bleiben erhalten. Wechselst du nach unten, werden überzählige Themen pausiert — du entscheidest, welche aktiv bleiben.' },
+  { q: 'Kann ich auch Unternehmen statt Themen beobachten?', a: 'Ja. Nicheletter unterscheidet zwischen Themen (etwa „Embedded Finance") und Unternehmen (etwa „Revolut"). Die Wettbewerber-Beobachtung gibt es ab dem Plus-Tarif.' },
 ];
 
 export default function PricingPage() {
@@ -68,7 +68,7 @@ export default function PricingPage() {
             Einfach. Transparent.<br />Kein Kleingedrucktes.
           </h1>
           <p className="lp-lead" style={{ margin: '18px auto 0', textAlign: 'center' }}>
-            Starte gratis — keine Kreditkarte nötig. Upgrade, wenn du mehr Stichwörter brauchst.
+            Starte kostenlos — ohne Kreditkarte. Bezahl erst, wenn du mehr Themen gleichzeitig im Blick behalten willst.
           </p>
         </div>
       </section>
@@ -107,7 +107,7 @@ export default function PricingPage() {
 
           <Reveal>
             <p style={{ textAlign: 'center', color: 'var(--ink-3)', fontSize: 14, marginTop: 24 }}>
-              Alle Pläne beinhalten: SSL-Verschlüsselung · DSGVO-konform · Hosted in EU
+              In allen Tarifen enthalten: SSL-Verschlüsselung · DSGVO-konform · Server in der EU
             </p>
           </Reveal>
         </div>
@@ -136,10 +136,10 @@ export default function PricingPage() {
           <Reveal>
             <div className="lp-cta">
               <h2 className="lp-h2" style={{ maxWidth: 640, margin: '0 auto' }}>
-                Starte heute kostenlos.
+                Heute kostenlos starten.
               </h2>
               <p className="lp-lead" style={{ margin: '14px auto 26px', textAlign: 'center' }}>
-                Keine Kreditkarte · Keine Kündigungsfalle · Dauerhaft Gratis möglich
+                Ohne Kreditkarte. Ohne Kündigungsfrist. Dauerhaft gratis möglich.
               </p>
               <SignupCard compact />
             </div>

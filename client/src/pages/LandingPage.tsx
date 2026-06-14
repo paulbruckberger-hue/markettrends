@@ -18,28 +18,28 @@ const DEMO_NICHES = ['Embedded Finance', 'Defense Tech', 'Climate Tech', 'KI-Age
 
 /** Plausible morning-brief for any niche term — the homepage's signature demo. */
 function buildBrief(term: string): { entries: Entry[]; summary: string } {
-  const t = term.trim() || 'deinem Markt';
+  const t = term.trim() || 'deiner Branche';
   return {
     entries: [
-      { pri: 1, cat: 'Finanzierung', catColor: '#00ba7c', title: `${t}: Marktführer sammelt 140 Mio. € ein — größte Runde des Jahres in der Branche`, src: 'Google News', time: 'heute, 06:12' },
-      { pri: 1, cat: 'Regulatorik', catColor: '#f4212e', title: `Neue EU-Vorgaben für ${t} treten 2026 in Kraft — Anbieter müssen nachziehen`, src: 'Newsroom', time: 'gestern, 18:40' },
-      { pri: 2, cat: 'Produktstart', catColor: '#00ba7c', title: `Direkter Wettbewerber launcht ${t}-Feature, an dem auch du arbeitest`, src: 'LinkedIn', time: 'heute, 07:30' },
-      { pri: 2, cat: 'Personal', catColor: '#f59e0b', title: `Ehem. Stripe-Manager übernimmt ${t}-Sparte bei Großkonzern`, src: 'LinkedIn', time: 'heute, 08:05' },
-      { pri: 3, cat: 'Zahlen', catColor: '#22d3ee', title: `Studie: ${t}-Markt wächst 2026 voraussichtlich um 28 %`, src: 'Newsroom', time: 'gestern' },
+      { pri: 1, cat: 'Finanzierung', catColor: '#00ba7c', title: `${t}: Marktführer sammelt 140 Mio. € ein — größte Finanzierungsrunde der Branche in diesem Jahr`, src: 'Google News', time: 'heute, 06:12' },
+      { pri: 1, cat: 'Regulierung', catColor: '#f4212e', title: `Neue EU-Vorgabe für ${t} kommt 2026 — Anbieter müssen ihre Prozesse anpassen`, src: 'Newsroom', time: 'gestern, 18:40' },
+      { pri: 2, cat: 'Produktstart', catColor: '#00ba7c', title: `Direkter Wettbewerber bringt ${t}-Funktion auf den Markt — an der auch du arbeitest`, src: 'LinkedIn', time: 'heute, 07:30' },
+      { pri: 2, cat: 'Personal', catColor: '#f59e0b', title: `Früherer Stripe-Manager übernimmt die ${t}-Sparte eines Großkonzerns`, src: 'LinkedIn', time: 'heute, 08:05' },
+      { pri: 3, cat: 'Zahlen', catColor: '#22d3ee', title: `Studie: Markt für ${t} wächst 2026 voraussichtlich um 28 %`, src: 'Newsroom', time: 'gestern' },
     ],
-    summary: `2 kritische Entwicklungen heute — angeführt von einer Rekord-Runde. Die EU-Regulierung solltest du auf dem Schirm haben.`,
+    summary: `Heute zwei kritische Entwicklungen — allen voran eine Rekord-Finanzierung. Die neue EU-Vorgabe solltest du im Auge behalten.`,
   };
 }
 
-/* ────────────────────────── interactive brief ────────────────────────── */
+/* ────────────────────────── hero (headline + brief share one niche) ────────────────────────── */
 
-function MorningBrief() {
-  const [term, setTerm] = useState(DEMO_NICHES[0]);
-  const [active, setActive] = useState(DEMO_NICHES[0]);
+function Hero() {
+  const [term, setTerm] = useState(DEMO_NICHES[0]);       // text in the input
+  const [active, setActive] = useState(DEMO_NICHES[0]);   // niche the brief + headline show
   const [phase, setPhase] = useState<'scanning' | 'ready'>('ready');
   const [run, setRun] = useState(0);
   const idx = useRef(0);
-  const locked = useRef(false); // visitor has taken control → stop auto-cycling
+  const locked = useRef(false);                           // visitor took control → stop cycling
   const scanTimer = useRef<number>();
 
   const rebuild = (t: string) => {
@@ -50,10 +50,8 @@ function MorningBrief() {
     scanTimer.current = window.setTimeout(() => setPhase('ready'), 720);
   };
 
-  // initial assemble
   useEffect(() => { rebuild(DEMO_NICHES[0]); /* eslint-disable-next-line */ }, []);
 
-  // auto-cycle through example niches until the visitor interacts
   useEffect(() => {
     const id = window.setInterval(() => {
       if (locked.current) return;
@@ -71,102 +69,9 @@ function MorningBrief() {
     rebuild(term.trim() || active);
   };
 
-  const { entries, summary } = buildBrief(active);
-  const today = new Date().toLocaleDateString('de-AT', { weekday: 'short', day: '2-digit', month: 'long' });
-
-  return (
-    <div className="lp-brief" aria-label="Beispiel-Briefing">
-      <div className="lp-brief-top">
-        <span className="lp-brief-date">Morgen-Briefing · {today}</span>
-        <span className="lp-brief-live"><span className="d" /> LIVE</span>
-      </div>
-
-      <form className="lp-niche" onSubmit={submit}>
-        <span className="lp-niche-hash">#</span>
-        <input
-          className="lp-niche-input"
-          value={term}
-          onChange={(e) => setTerm(e.target.value)}
-          onFocus={() => { locked.current = true; }}
-          placeholder="Deine Nische eingeben …"
-          aria-label="Deine Nische"
-        />
-        <button className="lp-niche-go" type="submit" aria-label="Briefing erstellen">→</button>
-      </form>
-
-      <div className="lp-brief-body">
-        <div className="lp-brief-h">Heute in <b>{active}</b></div>
-
-        {phase === 'scanning' ? (
-          <div className="lp-scan" key={`scan-${run}`}>
-            <div className="lp-scan-line"><span className="lp-scan-spin" /> Durchsucht News, LinkedIn &amp; Newsrooms …</div>
-            <div className="lp-scan-bar"><span /></div>
-            <div className="lp-scan-line" style={{ color: 'var(--ink-3)', fontSize: 13 }}>Bewertet &amp; sortiert nach Wichtigkeit</div>
-          </div>
-        ) : (
-          <div key={`brief-${run}`}>
-            {entries.map((e, i) => {
-              const p = PRI[e.pri];
-              return (
-                <div
-                  key={i}
-                  className={`lp-entry${i === 0 ? ' lead' : ''} fade-up`}
-                  style={{ ['--mk' as string]: p.color, animationDelay: `${i * 70}ms` }}
-                >
-                  <div className="bar" />
-                  <div>
-                    <span className="lp-entry-pri">{p.lbl}</span>
-                    <div className="lp-entry-title">{e.title}</div>
-                    <div className="lp-entry-meta">
-                      <span className="lp-entry-cat" style={{ background: `color-mix(in srgb, ${e.catColor} 16%, transparent)`, color: e.catColor }}>{e.cat}</span>
-                      {e.src} · {e.time}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-            <div className="lp-brief-foot">
-              <span className="ai">KI-Fazit</span>
-              <span>{summary}</span>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* ────────────────────────── page ────────────────────────── */
-
-const SOURCE_PILLS = [
-  { icon: '📰', label: 'Google News' }, { icon: '🟦', label: 'LinkedIn Posts' },
-  { icon: '🏢', label: 'Company Pages' }, { icon: '📡', label: 'RSS-Feeds' },
-  { icon: '🗞️', label: 'Branchen-Newsrooms' }, { icon: '🌍', label: 'DACH & Global' },
-  { icon: '🤖', label: 'KI-Bewertung' }, { icon: '✈️', label: 'Telegram' }, { icon: '✉️', label: 'E-Mail' },
-];
-
-const WITHOUT = [
-  '14 offene Tabs, 6 Newsletter und ein Google-Alerts-Postfach voller Spam',
-  'Stundenlanges LinkedIn-Scrollen — und trotzdem das Wichtige übersehen',
-  'Die Funding-Runde des Konkurrenten erst erfahren, wenn alle darüber reden',
-  'Eine Regulierung verpasst, die dein Geschäftsmodell betrifft',
-];
-const WITH = [
-  'Ein Briefing. Nach Wichtigkeit sortiert. Jeden Morgen um 7 Uhr.',
-  'News, LinkedIn & Newsrooms automatisch gelesen — du liest nur das Ergebnis',
-  'Kritische Moves erreichen dich sofort, noch bevor sie Mainstream werden',
-  'Du gehst in jedes Meeting als die best-informierte Person im Raum',
-];
-
-const FEATURES_TEASER = [
-  { icon: '🎯', title: 'Nur das, was zählt', body: 'Die KI hebt hervor, was du heute wissen musst — kritisch, relevant oder nur Kontext — und blendet den Rest aus.' },
-  { icon: '🛰️', title: 'Alle Quellen, eine Seite', body: 'Google News, LinkedIn, RSS und Branchen-Newsrooms — automatisch gelesen, dedupliziert, auf einer Seite zusammengeführt.' },
-  { icon: '⚔️', title: 'Behalte Konkurrenten im Blick', body: 'Beobachte konkrete Unternehmen und erfahre zuerst von Produktstarts, Funding, Personalwechseln und Expansion.' },
-];
-
-export default function LandingPage() {
+  // pointer glow
   const heroRef = useRef<HTMLDivElement>(null);
-  const onHeroMove = (e: React.MouseEvent) => {
+  const onMove = (e: React.MouseEvent) => {
     const el = heroRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
@@ -174,62 +79,160 @@ export default function LandingPage() {
     el.style.setProperty('--my', `${e.clientY - r.top}px`);
   };
 
+  const { entries, summary } = buildBrief(active);
+  const today = new Date().toLocaleDateString('de-AT', { weekday: 'short', day: '2-digit', month: 'long' });
+
+  return (
+    <header className="lp-hero" ref={heroRef} onMouseMove={onMove}>
+      <div style={{
+        position: 'absolute', inset: 0, pointerEvents: 'none',
+        background: 'radial-gradient(420px circle at var(--mx,70%) var(--my,30%), color-mix(in srgb,var(--acc) 15%,transparent),transparent 70%)',
+      }} />
+      <div className="lp-wrap lp-hero-grid">
+        <div>
+          <span className="lp-eyebrow"><span className="dot" /> Marktintelligenz für Gründer und Entscheider</span>
+
+          {/* headline shares the live niche with the brief — the requested combination.
+              minHeight reserves space for the tallest niche so the signup never shifts. */}
+          <h1 className="lp-h1" style={{ minHeight: '5.1em' }}>
+            Bleib die Person,<br />die zuerst weiß, was sich in{' '}
+            <span key={active} className="lp-grad fade-up" style={{ whiteSpace: 'nowrap' }}>{active}</span>{' '}
+            <span className="lp-em-serif">bewegt.</span>
+          </h1>
+
+          <p className="lp-sub">
+            Nicheletter ist dein KI-Analyst: Rund um die Uhr wertet er News, LinkedIn und
+            Branchenquellen aus, filtert das Wesentliche heraus und bringt es jeden Morgen
+            auf den Punkt — <b style={{ color: 'var(--ink)' }}>ein Briefing, nach Wichtigkeit sortiert</b>,
+            in zwei Minuten gelesen.
+          </p>
+
+          <div id="start" style={{ marginTop: 26, maxWidth: 460 }}>
+            <SignupCard />
+          </div>
+
+          <div className="lp-trust">
+            <span>✦ <b>Kostenlos</b></span>
+            <span>⚡ In <b>60 Sekunden</b> startklar</span>
+            <span>🔒 Ohne Kreditkarte</span>
+          </div>
+        </div>
+
+        {/* interactive editorial brief */}
+        <div>
+          <div className="lp-brief" aria-label="Beispiel-Briefing">
+            <div className="lp-brief-top">
+              <span className="lp-brief-date">Morgen-Briefing · {today}</span>
+              <span className="lp-brief-live"><span className="d" /> LIVE</span>
+            </div>
+
+            <form className="lp-niche" onSubmit={submit}>
+              <span className="lp-niche-hash">#</span>
+              <input
+                className="lp-niche-input"
+                value={term}
+                onChange={(e) => setTerm(e.target.value)}
+                onFocus={() => { locked.current = true; }}
+                placeholder="Deine Nische eingeben …"
+                aria-label="Deine Nische"
+              />
+              <button className="lp-niche-go" type="submit" aria-label="Briefing erstellen">→</button>
+            </form>
+
+            <div className="lp-brief-body">
+              <div className="lp-brief-h">Heute in <b>{active}</b></div>
+
+              {phase === 'scanning' ? (
+                <div className="lp-scan" key={`scan-${run}`}>
+                  <div className="lp-scan-line"><span className="lp-scan-spin" /> Durchsucht News, LinkedIn und Branchenquellen …</div>
+                  <div className="lp-scan-bar"><span /></div>
+                  <div className="lp-scan-line" style={{ color: 'var(--ink-3)', fontSize: 13 }}>Gewichtet und sortiert nach Wichtigkeit</div>
+                </div>
+              ) : (
+                <div key={`brief-${run}`}>
+                  {entries.map((e, i) => {
+                    const p = PRI[e.pri];
+                    return (
+                      <div
+                        key={i}
+                        className={`lp-entry${i === 0 ? ' lead' : ''} fade-up`}
+                        style={{ ['--mk' as string]: p.color, animationDelay: `${i * 70}ms` }}
+                      >
+                        <div className="bar" />
+                        <div>
+                          <span className="lp-entry-pri">{p.lbl}</span>
+                          <div className="lp-entry-title">{e.title}</div>
+                          <div className="lp-entry-meta">
+                            <span className="lp-entry-cat" style={{ background: `color-mix(in srgb, ${e.catColor} 16%, transparent)`, color: e.catColor }}>{e.cat}</span>
+                            {e.src} · {e.time}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div className="lp-brief-foot">
+                    <span className="ai">KI-Fazit</span>
+                    <span>{summary}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          <p style={{ textAlign: 'center', color: 'var(--ink-3)', fontSize: 12.5, marginTop: 14 }}>
+            👆 Gib deine eigene Nische ein und sieh, wie dein Briefing entsteht
+          </p>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+/* ────────────────────────── page content ────────────────────────── */
+
+const SOURCE_PILLS = [
+  { icon: '📰', label: 'Google News' }, { icon: '🟦', label: 'LinkedIn' },
+  { icon: '🏢', label: 'Unternehmensseiten' }, { icon: '📡', label: 'RSS-Feeds' },
+  { icon: '🗞️', label: 'Branchen-Newsrooms' }, { icon: '🌍', label: 'DACH & weltweit' },
+  { icon: '🤖', label: 'KI-Bewertung' }, { icon: '✈️', label: 'Telegram' }, { icon: '✉️', label: 'E-Mail' },
+];
+
+const WITHOUT = [
+  'Ein Dutzend offene Tabs, fünf Newsletter und ein Postfach voller nutzloser Alerts.',
+  'Stunden im LinkedIn-Feed — und das Wichtige rauscht trotzdem an dir vorbei.',
+  'Von der Finanzierungsrunde des Wettbewerbers erfährst du, wenn sie längst alle kennen.',
+  'Eine neue Vorschrift trifft dein Geschäft — und du bekommst es viel zu spät mit.',
+];
+const WITH = [
+  'Ein Briefing, nach Wichtigkeit sortiert. Jeden Morgen, pünktlich zum Kaffee.',
+  'News, LinkedIn und Branchenquellen automatisch ausgewertet — du liest nur das Ergebnis.',
+  'Wichtige Entwicklungen erreichen dich sofort — bevor sie alle anderen kennen.',
+  'In jedes Gespräch gehst du bestens vorbereitet, statt dich hinterher zu rechtfertigen.',
+];
+
+const FEATURES_TEASER = [
+  { icon: '🎯', title: 'Nur das, was zählt', body: 'Die KI hebt hervor, was heute wirklich wichtig ist — und lässt den Rest einfach weg.' },
+  { icon: '🛰️', title: 'Alle Quellen, eine Seite', body: 'News, LinkedIn, RSS und Branchen-Newsrooms — automatisch ausgewertet und übersichtlich an einem Ort, statt verstreut über ein Dutzend Tabs.' },
+  { icon: '⚔️', title: 'Wettbewerber im Blick', body: 'Beobachte einzelne Unternehmen und erfahre als Erster von Produktstarts, Finanzierungen, Personalwechseln und Expansionen.' },
+];
+
+export default function LandingPage() {
   return (
     <LandingLayout>
 
-      {/* ─── Hero ─── */}
-      <header className="lp-hero" ref={heroRef} onMouseMove={onHeroMove}>
-        <div style={{
-          position: 'absolute', inset: 0, pointerEvents: 'none',
-          background: 'radial-gradient(420px circle at var(--mx,70%) var(--my,30%), color-mix(in srgb,var(--acc) 15%,transparent),transparent 70%)',
-        }} />
-        <div className="lp-wrap lp-hero-grid">
-          <div>
-            <span className="lp-eyebrow"><span className="dot" /> Marktintelligenz für Gründer &amp; Experten</span>
-            <h1 className="lp-h1">
-              Bleib die Person,<br />die <span className="lp-grad">zuerst</span> weiß,<br />
-              was den Markt <span className="lp-em-serif">bewegt.</span>
-            </h1>
-            <p className="lp-sub">
-              Nicheletter ist dein KI-Analyst für deine Nische. Er liest rund um die Uhr
-              News, LinkedIn und Branchen-Newsrooms, trennt das Wichtige vom Rauschen und
-              legt dir <b style={{ color: 'var(--ink)' }}>jeden Morgen ein Briefing</b> auf den Tisch —
-              sortiert nach dem, was du heute wirklich wissen musst.
-            </p>
-
-            <div id="start" style={{ marginTop: 28, maxWidth: 460 }}>
-              <SignupCard />
-            </div>
-
-            <div className="lp-trust">
-              <span>✦ <b>Gratis</b> starten</span>
-              <span>⚡ Erstes Briefing in <b>~60 Sek.</b></span>
-              <span>🔒 Keine Kreditkarte</span>
-            </div>
-          </div>
-
-          {/* interactive editorial brief */}
-          <div>
-            <MorningBrief />
-            <p style={{ textAlign: 'center', color: 'var(--ink-3)', fontSize: 12.5, marginTop: 14 }}>
-              👆 Tippe deine eigene Nische ein und sieh dein Briefing entstehen
-            </p>
-          </div>
-        </div>
-      </header>
+      <Hero />
 
       {/* ─── Ohne / Mit (replaces vanity stats) ─── */}
       <section className="lp-section" style={{ paddingTop: 40 }}>
         <div className="lp-wrap">
           <Reveal>
-            <span className="lp-kicker">Der Unterschied</span>
-            <h2 className="lp-h2">Informiert sein war noch nie<br />das Problem. Lärm ist es.</h2>
+            <span className="lp-kicker">Das eigentliche Problem</span>
+            <h2 className="lp-h2">Nicht zu wenig Information ist das Problem.<br />Sondern zu viel.</h2>
           </Reveal>
           <div className="lp-vs">
             <Reveal>
               <div className="lp-vs-card bad">
                 <span className="lp-vs-tag">Ohne Nicheletter</span>
-                <h3>Du suchst — und verpasst trotzdem.</h3>
+                <h3>Du suchst überall — und übersiehst trotzdem das Entscheidende.</h3>
                 {WITHOUT.map((r) => (
                   <div key={r} className="lp-vs-row"><span className="ic">✕</span>{r}</div>
                 ))}
@@ -238,7 +241,7 @@ export default function LandingPage() {
             <Reveal delay={90}>
               <div className="lp-vs-card good">
                 <span className="lp-vs-tag">Mit Nicheletter</span>
-                <h3>Es kommt zu dir — vorsortiert.</h3>
+                <h3>Das Wichtige kommt zu dir — schon vorsortiert.</h3>
                 {WITH.map((r) => (
                   <div key={r} className="lp-vs-row"><span className="ic">✓</span>{r}</div>
                 ))}
@@ -251,7 +254,7 @@ export default function LandingPage() {
       {/* ─── Sources strip ─── */}
       <section className="lp-section" style={{ paddingTop: 24, paddingBottom: 28 }}>
         <div className="lp-wrap" style={{ textAlign: 'center', marginBottom: 22 }}>
-          <span className="lp-kicker">Was du sonst in 14 Tabs öffnen müsstest</span>
+          <span className="lp-kicker">Was du dir sonst aus einem Dutzend Tabs zusammensuchst</span>
         </div>
         <div className="lp-marquee">
           <div className="lp-marquee-track">
@@ -266,15 +269,15 @@ export default function LandingPage() {
       <section className="lp-section">
         <div className="lp-wrap">
           <Reveal>
-            <span className="lp-kicker">So funktioniert's</span>
-            <h2 className="lp-h2">Vom Stichwort zum Briefing —<br />in unter einer Minute.</h2>
-            <p className="lp-lead">Kein Setup, keine Filter-Bastelei. Du nennst deine Nische — die KI übernimmt das Lesen, Bewerten und Zusammenfassen.</p>
+            <span className="lp-kicker">So einfach geht's</span>
+            <h2 className="lp-h2">In unter einer Minute startklar.</h2>
+            <p className="lp-lead">Kein Einrichten, kein Filter-Basteln. Du nennst dein Thema — den Rest übernimmt die KI: lesen, gewichten, zusammenfassen.</p>
           </Reveal>
           <div className="lp-steps">
             {[
-              { icon: '🎯', title: 'Nische nennen', body: 'Ein Thema („Embedded Finance") oder ein Unternehmen („Revolut"). Geo-Fokus auf DACH, Österreich oder global — fertig.' },
-              { icon: '✨', title: 'KI liest & gewichtet', body: 'Sie durchsucht alle Quellen rund um die Uhr, bewertet jede Meldung nach Wichtigkeit und führt Duplikate zusammen.' },
-              { icon: '📬', title: 'Morgens informiert', body: 'Dein Briefing landet in der App, per Telegram und per E-Mail. Wirklich kritische Meldungen erreichen dich sofort.' },
+              { icon: '🎯', title: 'Thema festlegen', body: 'Ein Stichwort genügt: ein Thema wie „Embedded Finance" oder ein Unternehmen wie „Revolut". Dazu der regionale Fokus — DACH, Österreich oder weltweit.' },
+              { icon: '✨', title: 'Die KI wertet aus', body: 'Sie durchsucht alle Quellen rund um die Uhr, gewichtet jede Meldung nach Wichtigkeit und fasst Doppeltes zusammen.' },
+              { icon: '📬', title: 'Morgens bestens informiert', body: 'Dein Briefing wartet in der App, per Telegram und per E-Mail. Wirklich Dringendes erreicht dich sofort.' },
             ].map((s, i) => (
               <Reveal key={s.title} delay={i * 90}>
                 <div className="lp-step">
@@ -300,8 +303,8 @@ export default function LandingPage() {
       <section className="lp-section">
         <div className="lp-wrap">
           <Reveal>
-            <span className="lp-kicker">Dein unfairer Vorteil</span>
-            <h2 className="lp-h2">Mehr Überblick.<br />Weniger Zeit verschwendet.</h2>
+            <span className="lp-kicker">Dein Vorsprung</span>
+            <h2 className="lp-h2">Mehr Überblick.<br />In deutlich weniger Zeit.</h2>
           </Reveal>
           <div className="lp-feat-grid">
             {FEATURES_TEASER.map((f, i) => (
@@ -317,7 +320,7 @@ export default function LandingPage() {
           <Reveal>
             <div style={{ textAlign: 'center', marginTop: 28 }}>
               <Link to="/features" className="lp-btn lp-btn-ghost" style={{ padding: '11px 22px' }}>
-                Alle Features ansehen →
+                Alle Funktionen ansehen →
               </Link>
             </div>
           </Reveal>
@@ -329,14 +332,14 @@ export default function LandingPage() {
         <div className="lp-wrap">
           <Reveal>
             <span className="lp-kicker">Preise</span>
-            <h2 className="lp-h2">Starte gratis. Wachse, wenn du willst.</h2>
-            <p className="lp-lead">Keine Kreditkarte für den Einstieg. Upgrade bringt dir mehr Themen im Blick — sonst nichts Verstecktes.</p>
+            <h2 className="lp-h2">Starte kostenlos. Wachse, wenn du willst.</h2>
+            <p className="lp-lead">Für den Einstieg brauchst du keine Kreditkarte. Wer mehr zahlt, behält einfach mehr Themen gleichzeitig im Blick — keine versteckten Kosten, kein Kleingedrucktes.</p>
           </Reveal>
           <div className="lp-price-grid">
             {[
-              { name: 'GRATIS', price: '0 €', per: '', sub: 'Zum Reinschnuppern', features: ['1 Thema im Blick', 'Alle Quellen', 'KI-Gewichtung', 'Tägliches Briefing'], cta: 'Kostenlos starten', featured: false },
-              { name: 'PLUS', price: '4,99 €', per: '/Mo', sub: 'Für aktive Marktbeobachter', features: ['3 Themen im Blick', 'Telegram-Push', 'E-Mail-Briefing', 'Lernt aus Feedback'], cta: 'Plus wählen', featured: true },
-              { name: 'PRO', price: '9,99 €', per: '/Mo', sub: 'Für volle Marktabdeckung', features: ['10 Themen im Blick', 'Konkurrenz-Tracking', 'Sofort-Alerts', 'Themen-Cluster'], cta: 'Pro wählen', featured: false },
+              { name: 'GRATIS', price: '0 €', per: '', sub: 'Zum Ausprobieren', features: ['1 Thema im Blick', 'Alle Quellen', 'KI-Gewichtung', 'Tägliches Briefing'], cta: 'Kostenlos starten', featured: false },
+              { name: 'PLUS', price: '4,99 €', per: '/Mo', sub: 'Für aktive Marktbeobachter', features: ['3 Themen im Blick', 'Push per Telegram', 'Briefing per E-Mail', 'Passt sich dir an'], cta: 'Plus wählen', featured: true },
+              { name: 'PRO', price: '9,99 €', per: '/Mo', sub: 'Für den vollen Überblick', features: ['10 Themen im Blick', 'Wettbewerber im Blick', 'Sofort-Benachrichtigung', 'Themen gebündelt'], cta: 'Pro wählen', featured: false },
             ].map((p, i) => (
               <Reveal key={p.name} delay={i * 90} style={{ display: 'flex' }}>
                 <div className={`lp-price${p.featured ? ' feat' : ''}`} style={{ width: '100%' }}>
@@ -354,7 +357,7 @@ export default function LandingPage() {
           <Reveal>
             <div style={{ textAlign: 'center', marginTop: 20 }}>
               <Link to="/pricing" style={{ color: 'var(--ink-3)', fontSize: 14, fontWeight: 600, textDecoration: 'none' }}>
-                Vollständige Preisübersicht →
+                Zur vollständigen Preisübersicht →
               </Link>
             </div>
           </Reveal>
@@ -370,7 +373,7 @@ export default function LandingPage() {
                 Dein Markt verändert sich gerade.<br />Sei der Erste, der es weiß.
               </h2>
               <p className="lp-lead" style={{ margin: '16px auto 28px', textAlign: 'center' }}>
-                Leg in 30 Sekunden los — kostenlos, ohne Kreditkarte.
+                In 30 Sekunden startklar — kostenlos und ohne Kreditkarte.
               </p>
               <SignupCard compact />
             </div>

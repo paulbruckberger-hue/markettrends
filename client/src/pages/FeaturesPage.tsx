@@ -1,40 +1,40 @@
 import LandingLayout, { Reveal, SignupCard } from '../components/LandingLayout';
 
 const FEATURES = [
-  { icon: '🛰️', title: 'Alle Quellen, eine Seite', body: 'Google News, LinkedIn Posts & Company Pages, RSS-Feeds und Branchen-Newsrooms — automatisch gelesen, dedupliziert und an einem Ort statt in zehn Tabs.' },
-  { icon: '🧠', title: 'Sortiert nach Wichtigkeit', body: 'Jede Meldung wird bewertet: kritisch, relevant oder nur Kontext. Die KI hebt hervor, was du heute wissen musst, und blendet das Rauschen aus.' },
-  { icon: '⚔️', title: 'Behalte Konkurrenten im Blick', body: 'Beobachte konkrete Unternehmen (z. B. „Revolut", „N26") und erfahre zuerst von Produktstarts, Funding-Runden, Personalwechseln und Expansion.' },
-  { icon: '👍', title: 'Lernt, was dich interessiert', body: 'Ein Daumen rauf oder runter genügt — dein Briefing passt sich sofort an, in jedem Kanal: App, Telegram und E-Mail.' },
-  { icon: '🌐', title: 'Findet, was andere übersehen', body: 'Sucht parallel in fünf Sprachen (DE, EN, FR, ES, IT) und findet so auch Meldungen, die rein englische Tools verpassen. Geo-Fokus auf DACH, Österreich oder global.' },
-  { icon: '🚨', title: 'Sofort-Alerts bei Kritischem', body: 'Wirklich wichtige Meldungen erreichen dich sofort per Telegram-Push — der Rest wartet aufs kuratierte Morgen-Briefing.' },
-  { icon: '🗂️', title: 'Themen automatisch gebündelt', body: 'Die KI gruppiert verwandte Meldungen zu Themen-Strängen, damit du den roten Faden siehst statt Einzelmeldungen. Du behältst die Kontrolle.' },
-  { icon: '📊', title: 'Trends auf einen Blick', body: 'Sieh, welche Themen gerade an Fahrt gewinnen, wie sich die Nachrichtendichte über die Zeit entwickelt und welche Art von Ereignissen dominiert.' },
-  { icon: '🔗', title: 'Immer mit Quelle', body: 'Jede Meldung verlinkt direkt zur Originalquelle — keine Blackbox. Du kannst jede KI-Einschätzung gegen die Primärquelle prüfen.' },
+  { icon: '🛰️', title: 'Alle Quellen, eine Seite', body: 'News, LinkedIn, Unternehmensseiten, RSS und Branchen-Newsrooms — automatisch ausgewertet und übersichtlich an einem Ort, statt verstreut über ein Dutzend Tabs.' },
+  { icon: '🧠', title: 'Sortiert nach Wichtigkeit', body: 'Jede Meldung wird gewichtet: kritisch, relevant oder nur Kontext. Die KI hebt hervor, was du heute wissen musst — und lässt den Rest weg.' },
+  { icon: '⚔️', title: 'Wettbewerber im Blick', body: 'Beobachte einzelne Unternehmen (etwa „Revolut" oder „N26") und erfahre als Erster von Produktstarts, Finanzierungen, Personalwechseln und Expansionen.' },
+  { icon: '👍', title: 'Lernt, was dich interessiert', body: 'Ein Daumen rauf oder runter genügt — dein Briefing wird mit jedem Tag genauer, über alle Kanäle hinweg: App, Telegram und E-Mail.' },
+  { icon: '🌐', title: 'Findet, was andere übersehen', body: 'Sucht parallel in fünf Sprachen (Deutsch, Englisch, Französisch, Spanisch, Italienisch) und findet so auch Meldungen, die rein englische Werkzeuge verpassen. Regionaler Fokus auf DACH, Österreich oder weltweit.' },
+  { icon: '🚨', title: 'Sofort, wenn es zählt', body: 'Wirklich wichtige Meldungen erreichen dich umgehend per Telegram — der Rest wartet in Ruhe auf dein Morgen-Briefing.' },
+  { icon: '🗂️', title: 'Themen automatisch gebündelt', body: 'Verwandte Meldungen werden zu Themensträngen zusammengefasst, damit du den roten Faden siehst statt einzelner Schnipsel. Die Kontrolle behältst du.' },
+  { icon: '📊', title: 'Entwicklungen auf einen Blick', body: 'Erkenne, welche Themen gerade an Fahrt gewinnen, wie sich die Nachrichtenlage über die Zeit verändert und welche Art von Ereignissen dominiert.' },
+  { icon: '🔗', title: 'Immer mit Quelle', body: 'Jede Meldung verlinkt direkt zum Original — keine undurchsichtige Blackbox. Du kannst jede Einschätzung der KI an der Primärquelle prüfen.' },
 ];
 
 const SIGNALS = [
-  { de: 'Produktstart', color: '#00ba7c', desc: 'Neue Produkte, Features, Releases' },
-  { de: 'Expansion', color: '#1d9bf0', desc: 'Neue Märkte, Länder, Segmente' },
-  { de: 'Partnerschaft', color: '#7c5cff', desc: 'Joint Ventures, Kooperationen' },
-  { de: 'Finanzierung', color: '#00ba7c', desc: 'Funding-Runden, IPO, M&A' },
-  { de: 'Personal', color: '#f59e0b', desc: 'C-Level-Wechsel, Neueinstellungen' },
-  { de: 'Regulatorik', color: '#f4212e', desc: 'Gesetze, Aufsicht, Compliance' },
-  { de: 'Zahlen', color: '#22d3ee', desc: 'Quartalsberichte, Umsatz, KPIs' },
-  { de: 'Allgemein', color: '#8b98a5', desc: 'Sonstige relevante Meldungen' },
+  { de: 'Produktstart', color: '#00ba7c', desc: 'Neue Produkte, Funktionen, Releases' },
+  { de: 'Expansion', color: '#1d9bf0', desc: 'Neue Märkte, Länder und Segmente' },
+  { de: 'Partnerschaft', color: '#7c5cff', desc: 'Kooperationen und Allianzen' },
+  { de: 'Finanzierung', color: '#00ba7c', desc: 'Finanzierungsrunden, Börsengänge, Übernahmen' },
+  { de: 'Personal', color: '#f59e0b', desc: 'Führungswechsel und Schlüsselrollen' },
+  { de: 'Regulierung', color: '#f4212e', desc: 'Gesetze, Aufsicht und Vorgaben' },
+  { de: 'Zahlen', color: '#22d3ee', desc: 'Geschäftszahlen, Umsatz und Kennzahlen' },
+  { de: 'Allgemein', color: '#8b98a5', desc: 'Weitere relevante Meldungen' },
 ];
 
 const CHANNELS = [
   {
-    icon: '📱', title: 'In-App-Feed', color: '#1d9bf0',
-    points: ['Gerankter Stream mit Lese-Status', 'Bookmarks & Themen-Cluster', 'Desktop (3-Spalten) und Mobile'],
+    icon: '📱', title: 'In der App', color: '#1d9bf0',
+    points: ['Sortierter Überblick mit Lesestatus', 'Merken und nach Themen gebündelt', 'Am Desktop und unterwegs'],
   },
   {
-    icon: '✈️', title: 'Telegram', color: '#7c5cff',
-    points: ['Push pro kuratiertem Tagesbriefing', '„Mehr Infos" Button direkt im Chat', '👍/👎 Feedback ohne App-Öffnen'],
+    icon: '✈️', title: 'Per Telegram', color: '#7c5cff',
+    points: ['Eine Nachricht pro Briefing', '„Mehr dazu" direkt im Chat', 'Bewerten mit 👍/👎, ohne die App zu öffnen'],
   },
   {
-    icon: '✉️', title: 'E-Mail-Newsletter', color: '#00ba7c',
-    points: ['KI-kuratierter HTML-Newsletter', '1-Klick-Feedback aus der Mail', 'Takt wählbar (täglich/wöchentlich)'],
+    icon: '✉️', title: 'Per E-Mail', color: '#00ba7c',
+    points: ['Übersichtlich aufbereitetes Briefing', 'Bewerten mit einem Klick aus der Mail', 'Frequenz frei wählbar — täglich oder wöchentlich'],
   },
 ];
 
@@ -45,13 +45,13 @@ export default function FeaturesPage() {
       {/* page hero */}
       <section className="lp-section" style={{ paddingBottom: 40, textAlign: 'center' }}>
         <div className="lp-wrap">
-          <span className="lp-kicker">Features</span>
+          <span className="lp-kicker">Funktionen</span>
           <h1 className="lp-h2" style={{ fontSize: 'clamp(36px,5.5vw,62px)', marginTop: 14 }}>
-            Alles, was du für echte<br />Marktintelligenz brauchst.
+            Alles, um in deiner Nische<br />nichts mehr zu verpassen.
           </h1>
           <p className="lp-lead" style={{ margin: '18px auto 0', textAlign: 'center' }}>
-            Nicheletter kombiniert 4 Quellen, mehrsprachige KI und drei Zustellkanäle
-            zu einem durchgehend personalisiertem Briefing.
+            Nicheletter vereint alle relevanten Quellen, eine mehrsprachige KI und drei
+            Zustellwege zu einem Briefing, das sich ganz auf dich einstellt.
           </p>
         </div>
       </section>
@@ -108,9 +108,9 @@ export default function FeaturesPage() {
       <section className="lp-section">
         <div className="lp-wrap">
           <Reveal>
-            <span className="lp-kicker">Zugestellt, wo du bist</span>
-            <h2 className="lp-h2">Drei Kanäle, ein 👍/👎 lernt mit.</h2>
-            <p className="lp-lead">Dein Feedback in einem Kanal verbessert dein Ranking in allen anderen — sofort, ohne manuelles Reranking.</p>
+            <span className="lp-kicker">Da, wo du sowieso bist</span>
+            <h2 className="lp-h2">Drei Wege zu dir.<br />Ein Tippen genügt.</h2>
+            <p className="lp-lead">Deine Bewertung in einem Kanal verbessert dein Briefing in allen anderen — sofort und ohne Aufwand.</p>
           </Reveal>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 18, marginTop: 36 }}>
             {CHANNELS.map((ch, i) => (
@@ -147,10 +147,10 @@ export default function FeaturesPage() {
           <Reveal>
             <div className="lp-cta">
               <h2 className="lp-h2" style={{ maxWidth: 640, margin: '0 auto' }}>
-                Alle Features. Kostenlos ausprobieren.
+                Alle Funktionen. Kostenlos ausprobieren.
               </h2>
               <p className="lp-lead" style={{ margin: '14px auto 26px', textAlign: 'center' }}>
-                Starte heute gratis — kein Kreditkarte, kein Risiko.
+                Heute kostenlos starten — ohne Kreditkarte, ohne Risiko.
               </p>
               <SignupCard compact />
             </div>
