@@ -4,14 +4,16 @@ import { isLoggedIn, useMe } from './hooks/useAuth';
 import { useMediaQuery } from './lib/useMediaQuery';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import LandingPage from './pages/LandingPage';
 import AcceptInvitePage from './pages/AcceptInvitePage';
 import MagicPage from './pages/MagicPage';
 import AdminPage from './pages/AdminPage';
 import AppShell from './AppShell';
 import DesktopShell from './desktop/DesktopShell';
 
+/** Logged-out visitors see the public landing page; logged-in users get the app. */
 function Protected({ children }: { children: ReactNode }) {
-  return isLoggedIn() ? <>{children}</> : <Navigate to="/login" replace />;
+  return isLoggedIn() ? <>{children}</> : <LandingPage />;
 }
 
 /** Wide viewports get the 3-column desktop shell; phones/tablets keep the
