@@ -50,11 +50,47 @@ export function htmlToWhatsApp(html: string): string {
   return t.trim();
 }
 
-/** Eine WhatsApp-Nachricht senden. Wirft bei Fehlern (Caller fängt/loggt). */
-export async function sendWhatsApp(phone: string, apikey: string, text: string): Promise<void> {
-  if (!whatsappConfigured(phone, apikey)) throw new Error('WhatsApp (CallMeBot) ist nicht konfiguriert');
+// CallMeBot überträgt den Text als GET-Query-Parameter. Lange Briefings (Emojis
+// → je ~12 Zeichen URL-kodiert, lange LinkedIn-URLs → ~3×) sprengen die Server-
+// URL-Grenze (~2048 Zeichen) und CallMeBot schneidet den Text dann MITTEN im Wort
+// ab — genau das Symptom des abgeschnittenen Tagesbriefings. Daher splitten wir
+// in mehrere Nachrichten, deren KODIERTE Länge sicher unter der Grenze bleibt.
+const MAX_ENCODED_PER_MSG = 1200; // konservativ unter ~2048 inkl. phone+apikey+endpoint
+const encLen = (s: string): number => encodeURIComponent(s).length;
+
+/** Text an Zeilengrenzen in Stücke ≤ maxEncoded (URL-kodiert) zerlegen. */
+export function chunkForWhatsApp(text: string, maxEncoded = MAX_ENCODED_PER_MSG): string[] {
+  const chunks: string[] = [];
+  let cur = '';
+  const flush = (): void => { if (cur) { chunks.push(cur); cur = ''; } };
+
+  for (const line of text.split('\n')) {
+    const candidate = cur ? `${cur}\n${line}` : line;
+    if (encLen(candidate) <= maxEncoded) { cur = candidate; continue; }
+    // Aktuelles Stück ist voll → abschließen, mit dieser Zeile neu beginnen.
+    flush();
+    if (encLen(line) <= maxEncoded) { cur = line; continue; }
+    // Einzelne überlange Zeile (z.B. eine sehr lange URL) → hart zeichenweise teilen.
+    let rest = line;
+    while (encLen(rest) > maxEncoded) {
+      let lo = 1, hi = rest.length, cut = 1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (encLen(rest.slice(0, mid)) <= maxEncoded) { cut = mid; lo = mid + 1; } else hi = mid - 1;
+      }
+      chunks.push(rest.slice(0, cut));
+      rest = rest.slice(cut);
+    }
+    cur = rest;
+  }
+  flush();
+  return chunks;
+}
+
+/** Ein einzelnes Stück an CallMeBot senden. Wirft bei Fehlern. */
+async function sendOneWhatsApp(phone: string, apikey: string, text: string): Promise<void> {
   const url = `${ENDPOINT}?phone=${encodeURIComponent(normalizePhone(phone))}`
-    + `&text=${encodeURIComponent(text.slice(0, 3500))}`
+    + `&text=${encodeURIComponent(text)}`
     + `&apikey=${encodeURIComponent(apikey)}`;
 
   return withRetry(async () => {
@@ -71,4 +107,21 @@ export async function sendWhatsApp(phone: string, apikey: string, text: string):
       throw new Error(`CallMeBot: ${body.slice(0, 220) || resp.status}`);
     }
   }, { label: 'whatsapp(callmebot)', attempts: 2, baseDelayMs: 800 });
+}
+
+/**
+ * Eine WhatsApp-Nachricht senden. Lange Nachrichten werden automatisch in
+ * mehrere Teile gesplittet (CallMeBot-URL-Limit), sequenziell mit kleiner Pause
+ * gegen das Free-Tier-Ratelimit. Wirft bei Fehlern (Caller fängt/loggt).
+ */
+export async function sendWhatsApp(phone: string, apikey: string, text: string): Promise<void> {
+  if (!whatsappConfigured(phone, apikey)) throw new Error('WhatsApp (CallMeBot) ist nicht konfiguriert');
+  const chunks = chunkForWhatsApp(text.slice(0, 8000)); // harte Obergrenze gegen Ausreißer
+  if (chunks.length === 0) return;
+
+  for (let i = 0; i < chunks.length; i++) {
+    const body = chunks.length > 1 ? `(${i + 1}/${chunks.length})\n${chunks[i]}` : chunks[i];
+    await sendOneWhatsApp(phone, apikey, body);
+    if (i < chunks.length - 1) await new Promise((r) => setTimeout(r, 1500)); // CallMeBot-Ratelimit
+  }
 }

@@ -10,6 +10,7 @@ import { fetchGoogleNews } from './sources/googleNews';
 import { fetchLinkedInPosts, toPostedLimit } from './sources/apifyLinkedIn';
 import { fetchCompanyPagePosts } from './sources/apifyCompanyPage';
 import { apifyEnabled } from './sources/apifyClient';
+import { claimLinkedInScrape, releaseLinkedInScrape } from './sources/linkedinLedger';
 import { fanOutBreaking } from './notifications';
 import { SourceArticle } from './sources/types';
 import { GeoFilter, WatchType } from '../types';
@@ -46,12 +47,18 @@ interface GatherOptions {
   includeLinkedIn: boolean;
   /** Apify `postedLimit` window for LinkedIn ('24h' on scheduled runs). */
   linkedinPostedLimit: string;
+  /**
+   * Apply the global per-day LinkedIn scrape ledger (cost brake): skip any
+   * LinkedIn query already scraped today for this window. Disabled for explicit
+   * admin lookback runs — those intentionally re-pull a wider history.
+   */
+  useLinkedInLedger: boolean;
   appCfg?: AppConfig;
 }
 
 /** Gather raw candidates from Google News + LinkedIn for a term. */
 async function gatherCandidates(term: SearchTermRow, opts: GatherOptions): Promise<SourceArticle[]> {
-  const { lookbackDays, includeLinkedIn, linkedinPostedLimit, appCfg } = opts;
+  const { lookbackDays, includeLinkedIn, linkedinPostedLimit, useLinkedInLedger, appCfg } = opts;
   const out: SourceArticle[] = [];
   const cfg = term.sources_config;
   const geo = term.geo_filter as GeoFilter;
@@ -88,18 +95,35 @@ async function gatherCandidates(term: SearchTermRow, opts: GatherOptions): Promi
     const issued = new Set<string>();
     const li = async (q: string, lang?: string): Promise<void> => {
       const key = q.trim().toLowerCase();
-      if (issued.has(key)) return;
+      if (issued.has(key)) return;          // dedup within this run
       issued.add(key);
+      // Global per-day ledger: skip if this exact query+window was already
+      // scraped today by ANY term/run (cost brake). Lookback runs bypass it.
+      if (useLinkedInLedger && !(await claimLinkedInScrape(q, linkedinPostedLimit))) {
+        console.log(`[collector] LinkedIn skip (bereits heute abgefragt): "${q}" [${linkedinPostedLimit}]`);
+        return;
+      }
       try { out.push(...await fetchLinkedInPosts(q, linkedinPostedLimit, liLimit)); }
-      catch (err) { logSourceError(`linkedin_posts${lang ? `[${lang}]` : ''}`, term, err); }
+      catch (err) {
+        if (useLinkedInLedger) await releaseLinkedInScrape(q, linkedinPostedLimit);
+        logSourceError(`linkedin_posts${lang ? `[${lang}]` : ''}`, term, err);
+      }
     };
     await li(term.query_display);
     for (const al of allAliases) await li(al.q, al.lang);
   }
 
   if (cfg.linkedin_company_page && isCompany && term.company_linkedin_id && includeLinkedIn && apifyEnabled()) {
-    try { out.push(...await fetchCompanyPagePosts(term.company_linkedin_id, linkedinPostedLimit, liLimit)); }
-    catch (err) { logSourceError('linkedin_company_page', term, err); }
+    const companyKey = `company:${term.company_linkedin_id}`;
+    if (useLinkedInLedger && !(await claimLinkedInScrape(companyKey, linkedinPostedLimit))) {
+      console.log(`[collector] LinkedIn company skip (bereits heute abgefragt): ${term.company_linkedin_id} [${linkedinPostedLimit}]`);
+    } else {
+      try { out.push(...await fetchCompanyPagePosts(term.company_linkedin_id, linkedinPostedLimit, liLimit)); }
+      catch (err) {
+        if (useLinkedInLedger) await releaseLinkedInScrape(companyKey, linkedinPostedLimit);
+        logSourceError('linkedin_company_page', term, err);
+      }
+    }
   }
 
   return out;
@@ -181,7 +205,10 @@ export async function collectForSearchTerm(
       (term.sources_config.linkedin_company_page && term.type === 'company' && !!term.company_linkedin_id)
     );
 
-    const candidates = await gatherCandidates(term, { lookbackDays, includeLinkedIn, linkedinPostedLimit, appCfg });
+    // Apply the cost-brake ledger to recurring/standard scrapes, but NOT to an
+    // explicit admin lookback (those deliberately re-pull a wider history).
+    const useLinkedInLedger = !lookbackDays;
+    const candidates = await gatherCandidates(term, { lookbackDays, includeLinkedIn, linkedinPostedLimit, useLinkedInLedger, appCfg });
     summary.articles_found = candidates.length;
 
     // Dedup within this run by content_hash (same URL from multiple sources).

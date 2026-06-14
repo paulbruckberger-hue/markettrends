@@ -83,6 +83,21 @@ export const bot_sessions = pgTable('bot_sessions', {
   pk: primaryKey({ columns: [t.channel, t.chat_id] }),
 }));
 
+// ---------- LinkedIn-Scrape-Ledger (GLOBAL, Kostenbremse) ----------
+// Jeder Apify-LinkedIn-Scrape ist kostenpflichtig pro Post. Diese Tabelle stellt
+// sicher, dass dieselbe Such-Query (inkl. Übersetzungs-Aliase) pro Wiener
+// Kalendertag und Zeitfenster GLOBAL höchstens EINMAL läuft — egal wie viele
+// Keywords/Abos dieselbe Query erzeugen oder wie oft der 6h-Scheduler feuert.
+// Verhindert die Mehrfach-Abfrage identischer Queries innerhalb von 24h.
+export const linkedin_query_runs = pgTable('linkedin_query_runs', {
+  query_norm: text('query_norm').notNull(),     // normalisierte Such-Query (lowercase/trim)
+  posted_limit: text('posted_limit').notNull(), // Apify-Fenster: '24h' | 'week' | 'month'
+  day_key: text('day_key').notNull(),           // 'YYYY-MM-DD' Europe/Vienna
+  last_run_at: timestamp('last_run_at').defaultNow(),
+}, (t) => ({
+  pk: primaryKey({ columns: [t.query_norm, t.posted_limit, t.day_key] }),
+}));
+
 // ---------- Search Terms (GETEILT, dedupliziert über alle User) ----------
 // Hier läuft jede Suche genau einmal. Mehrere User-Abos zeigen auf dieselbe Zeile.
 export const search_terms = pgTable('search_terms', {

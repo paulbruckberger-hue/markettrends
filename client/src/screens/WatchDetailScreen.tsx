@@ -4,6 +4,7 @@ import { RunbackButton } from '../components/RunbackButton';
 import { GEO_META, toDisplayItem } from '../lib/presenter';
 import { flattenFeed, useFeed } from '../hooks/useArticles';
 import { useDeleteWatch, useRunWatch, useWatchlist } from '../hooks/useWatchlist';
+import { useMe } from '../hooks/useAuth';
 
 type Nav = (name: string, params?: Record<string, unknown>) => void;
 
@@ -11,6 +12,8 @@ export default function WatchDetailScreen({ id, actions, nav, back, flash }: {
   id: string; actions: ItemActions; nav: Nav; back: () => void; flash: (m: string) => void;
 }) {
   const { data: watches } = useWatchlist();
+  const { data: me } = useMe();
+  const isAdmin = me?.role === 'admin';
   const feed = useFeed({ watch_item_id: id });
   const run = useRunWatch();
   const del = useDeleteWatch();
@@ -34,10 +37,12 @@ export default function WatchDetailScreen({ id, actions, nav, back, flash }: {
     <>
       <DetailBar title={w.display_name} back={back} right={
         <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <RunbackButton busy={run.isPending} onRun={(days) => {
-            run.mutate({ id, lookback_days: days });
-            flash(days ? `Suche der letzten ${days} Tage gestartet …` : 'Abruf gestartet …');
-          }} />
+          {isAdmin && (
+            <RunbackButton busy={run.isPending} onRun={(days) => {
+              run.mutate({ id, lookback_days: days });
+              flash(days ? `Suche der letzten ${days} Tage gestartet …` : 'Abruf gestartet …');
+            }} />
+          )}
           <button className="iconbtn" style={{ color: 'var(--neg)' }} title="Löschen" onClick={onDelete}>
             <Icon name="trash" size={19} />
           </button>
@@ -67,7 +72,7 @@ export default function WatchDetailScreen({ id, actions, nav, back, flash }: {
         <div className="hr" />
         {feed.isLoading && <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 0' }}><Spinner /></div>}
         {!feed.isLoading && items.length === 0 && (
-          <Empty icon="bolt" title="Noch keine Signale" body="Rufe diese Beobachtung ab, um Signale zu sammeln." />
+          <Empty icon="bolt" title="Noch keine Signale" body={isAdmin ? 'Rufe diese Beobachtung ab, um Signale zu sammeln.' : 'Neue Signale erscheinen automatisch beim nächsten geplanten Abruf.'} />
         )}
         {items.map((it) => (
           <FeedCard key={it.id} item={it} variant="standard" on={actions} onOpen={(x) => nav('detail', { item: x })} />

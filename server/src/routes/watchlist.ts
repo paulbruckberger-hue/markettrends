@@ -139,7 +139,15 @@ watchlistRouter.delete('/:id', async (req: AuthedRequest, res: Response) => {
 });
 
 // POST /api/watchlist/:id/run  → triggert Collection für diesen search_term
+// NUR Admins: ein manueller Abruf (und erst recht ein historischer Lookback) löst
+// kostenpflichtige Apify-Scrapes aus. Normale User sehen Content ausschließlich
+// aus den geplanten Scraper-Intervallen — sie warten nach der Registrierung auf
+// den nächsten Lauf.
 watchlistRouter.post('/:id/run', async (req: AuthedRequest, res: Response) => {
+  if (req.user?.role !== 'admin') {
+    res.status(403).json({ error: 'Manueller Abruf ist Admins vorbehalten. Neue Signale erscheinen automatisch beim nächsten geplanten Lauf.' });
+    return;
+  }
   const [wi] = await db.select().from(watch_items)
     .where(and(eq(watch_items.id, req.params.id), eq(watch_items.user_id, req.user!.id)));
   if (!wi) {

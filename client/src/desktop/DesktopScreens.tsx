@@ -17,6 +17,7 @@ import {
 import { SOURCE_LABELS } from '../lib/labels';
 import { flattenFeed, useFeed } from '../hooks/useArticles';
 import { useDeleteWatch, useRunWatch, useWatchlist } from '../hooks/useWatchlist';
+import { useMe } from '../hooks/useAuth';
 import { useOverview, useWatchAnalytics } from '../hooks/useAnalytics';
 import { useCompetitor } from '../hooks/useCompetitor';
 import { useSettings, useUpdateSettings, useTestWhatsapp } from '../hooks/useSettings';
@@ -143,7 +144,7 @@ function scheduleLabel(w: WatchItem): string {
   return 'alle ' + w.schedule_interval;
 }
 
-function WatchCard({ w, nav, onRun, onDelete }: { w: WatchItem; nav: Nav; onRun: (id: string) => void; onDelete: (w: WatchItem) => void }) {
+function WatchCard({ w, nav, onRun, onDelete, isAdmin }: { w: WatchItem; nav: Nav; onRun: (id: string) => void; onDelete: (w: WatchItem) => void; isAdmin: boolean }) {
   const color = w.color || '#1d9bf0';
   const geo = GEO_META[w.geo_filter];
   return (
@@ -176,10 +177,12 @@ function WatchCard({ w, nav, onRun, onDelete }: { w: WatchItem; nav: Nav; onRun:
               <span style={{ width: 8, height: 8, borderRadius: '50%', background: w.is_active ? 'var(--pos)' : 'var(--text-3)' }} />
               {w.is_active ? 'Aktiv' : 'Pausiert'}
             </span>
-            <button className="press" onClick={(e) => { e.stopPropagation(); onRun(w.id); }}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 700, color: 'var(--text)', padding: '4px 9px', borderRadius: 999, border: '1px solid var(--border-strong)', background: 'transparent', cursor: 'pointer' }}>
-              <Icon name="play" size={11} /> Abrufen
-            </button>
+            {isAdmin && (
+              <button className="press" onClick={(e) => { e.stopPropagation(); onRun(w.id); }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 700, color: 'var(--text)', padding: '4px 9px', borderRadius: 999, border: '1px solid var(--border-strong)', background: 'transparent', cursor: 'pointer' }}>
+                <Icon name="play" size={11} /> Abrufen
+              </button>
+            )}
             <button className="press" title="Löschen" onClick={(e) => { e.stopPropagation(); onDelete(w); }}
               style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 999, border: '1px solid var(--border-strong)', background: 'transparent', color: 'var(--neg)', cursor: 'pointer' }}>
               <Icon name="trash" size={13} />
@@ -194,6 +197,8 @@ function WatchCard({ w, nav, onRun, onDelete }: { w: WatchItem; nav: Nav; onRun:
 export function DeskWatchlist({ nav, onCompose, flash }: { nav: Nav; onCompose: () => void; flash: (m: string) => void }) {
   const [tab, setTab] = useState<'all' | 'topic' | 'company'>('all');
   const { data: watches, isLoading } = useWatchlist();
+  const { data: me } = useMe();
+  const isAdmin = me?.role === 'admin';
   const run = useRunWatch();
   const del = useDeleteWatch();
   let list = watches ?? [];
@@ -217,7 +222,7 @@ export function DeskWatchlist({ nav, onCompose, flash }: { nav: Nav; onCompose: 
           <Empty icon="watchlist" title="Noch keine Beobachtungen" body="Lege ein Thema oder Unternehmen an, das du beobachten möchtest." />
         )}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(285px, 1fr))', gap: 14, padding: 18 }}>
-          {list.map((w) => <WatchCard key={w.id} w={w} nav={nav} onRun={onRun} onDelete={onDelete} />)}
+          {list.map((w) => <WatchCard key={w.id} w={w} nav={nav} onRun={onRun} onDelete={onDelete} isAdmin={isAdmin} />)}
           {!isLoading && (
             <button className="press" onClick={onCompose} style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, minHeight: 150,
@@ -513,6 +518,8 @@ export function DeskCompetitor({ id, actions, nav, back, onCompose, flash }: {
   const { data: d, isLoading } = useCompetitor(id);
   const { data: feedData } = useFeed({ watch_item_id: id });
   const sentFeed = useFeed({ watch_item_id: id, sentiment: sentFilter ?? undefined }, { enabled: !!sentFilter });
+  const { data: me } = useMe();
+  const isAdmin = me?.role === 'admin';
   const run = useRunWatch();
   const del = useDeleteWatch();
   const onDelete = () => {
@@ -537,10 +544,12 @@ export function DeskCompetitor({ id, actions, nav, back, onCompose, flash }: {
       <DeskHeader title={d.subject} onBack={back}
         right={
           <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <RunbackButton busy={run.isPending} onRun={(days) => {
-              run.mutate({ id, lookback_days: days });
-              flash(days ? `Suche der letzten ${days} Tage gestartet …` : 'Abruf gestartet …');
-            }} />
+            {isAdmin && (
+              <RunbackButton busy={run.isPending} onRun={(days) => {
+                run.mutate({ id, lookback_days: days });
+                flash(days ? `Suche der letzten ${days} Tage gestartet …` : 'Abruf gestartet …');
+              }} />
+            )}
             <button className="iconbtn" style={{ color: 'var(--neg)' }} title="Löschen" onClick={onDelete}><Icon name="trash" size={19} /></button>
           </div>
         }
@@ -756,6 +765,8 @@ export function DeskWatchDetail({ id, actions, nav, back, flash }: {
   id: string; actions: ItemActions; nav: Nav; back: () => void; flash: (m: string) => void;
 }) {
   const { data: watches } = useWatchlist();
+  const { data: me } = useMe();
+  const isAdmin = me?.role === 'admin';
   const feed = useFeed({ watch_item_id: id });
   const run = useRunWatch();
   const del = useDeleteWatch();
@@ -778,10 +789,12 @@ export function DeskWatchDetail({ id, actions, nav, back, flash }: {
       <DeskHeader title={w.display_name} onBack={back}
         right={
           <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <RunbackButton busy={run.isPending} onRun={(days) => {
-              run.mutate({ id, lookback_days: days });
-              flash(days ? `Suche der letzten ${days} Tage gestartet …` : 'Abruf gestartet …');
-            }} />
+            {isAdmin && (
+              <RunbackButton busy={run.isPending} onRun={(days) => {
+                run.mutate({ id, lookback_days: days });
+                flash(days ? `Suche der letzten ${days} Tage gestartet …` : 'Abruf gestartet …');
+              }} />
+            )}
             <button className="iconbtn" style={{ color: 'var(--neg)' }} title="Löschen" onClick={onDelete}><Icon name="trash" size={19} /></button>
           </div>
         } />
