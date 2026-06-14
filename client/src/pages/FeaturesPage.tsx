@@ -1,15 +1,15 @@
 import LandingLayout, { Reveal, SignupCard } from '../components/LandingLayout';
 
 const FEATURES = [
-  { icon: '🛰️', title: '4 Quellen, eine Ansicht', body: 'Google News, LinkedIn Posts & Company Pages, RSS-Feeds und Newsrooms — alles gebündelt, dedupliziert und an einem Ort statt in zehn Tabs.' },
-  { icon: '🧠', title: 'KI-Priorisierung P1–P3', body: 'Jedes Signal wird automatisch bewertet: P1 (Kritisch), P2 (Relevant), P3 (Kontext). Die KI sortiert das Rauschen heraus, bevor es deine Zeit kostet.' },
-  { icon: '⚔️', title: 'Wettbewerbsanalyse', body: 'Beobachte konkrete Unternehmen (z. B. „Revolut", „N26") und verfolge Produktstarts, Funding-Runden, Personalwechsel und Expansionspläne.' },
-  { icon: '👍', title: 'Lernt aus deinem Feedback', body: 'Ein Daumen rauf oder runter genügt — dein persönliches Ranking passt sich sofort an, in jedem Kanal: App, Telegram und E-Mail.' },
-  { icon: '🌐', title: 'Mehrsprachige Suche', body: 'Alias-Erweiterung in DE, EN, FR, ES und IT findet auch Meldungen, die rein englische Tools übersehen. Geo-Filter für DACH, Österreich oder global.' },
-  { icon: '🚨', title: 'Breaking-Alerts', body: 'Wirklich kritische Signale (P1) erreichen dich sofort per Telegram-Push — der Rest wartet aufs kuratierte Tagesbriefing.' },
-  { icon: '🗂️', title: 'Themen-Cluster', body: 'Die KI schlägt dir automatisch Cluster vor, die verwandte Signale bündeln. Du kannst Cluster bestätigen, umbenennen oder ablehnen.' },
-  { icon: '📊', title: 'Analytics & Dashboard', body: 'Sieh auf einen Blick, welche Stichwörter die meisten Signale erzeugen, wie sich die Signaldichte über Zeit entwickelt und welche Typen dominieren.' },
-  { icon: '🔗', title: 'Immer mit Quelle', body: 'Jedes Signal verlinkt direkt zur Originalquelle — keine Blackbox. Du kannst jede KI-Einschätzung gegen die Primärquelle prüfen.' },
+  { icon: '🛰️', title: 'Alle Quellen, eine Seite', body: 'Google News, LinkedIn Posts & Company Pages, RSS-Feeds und Branchen-Newsrooms — automatisch gelesen, dedupliziert und an einem Ort statt in zehn Tabs.' },
+  { icon: '🧠', title: 'Sortiert nach Wichtigkeit', body: 'Jede Meldung wird bewertet: kritisch, relevant oder nur Kontext. Die KI hebt hervor, was du heute wissen musst, und blendet das Rauschen aus.' },
+  { icon: '⚔️', title: 'Behalte Konkurrenten im Blick', body: 'Beobachte konkrete Unternehmen (z. B. „Revolut", „N26") und erfahre zuerst von Produktstarts, Funding-Runden, Personalwechseln und Expansion.' },
+  { icon: '👍', title: 'Lernt, was dich interessiert', body: 'Ein Daumen rauf oder runter genügt — dein Briefing passt sich sofort an, in jedem Kanal: App, Telegram und E-Mail.' },
+  { icon: '🌐', title: 'Findet, was andere übersehen', body: 'Sucht parallel in fünf Sprachen (DE, EN, FR, ES, IT) und findet so auch Meldungen, die rein englische Tools verpassen. Geo-Fokus auf DACH, Österreich oder global.' },
+  { icon: '🚨', title: 'Sofort-Alerts bei Kritischem', body: 'Wirklich wichtige Meldungen erreichen dich sofort per Telegram-Push — der Rest wartet aufs kuratierte Morgen-Briefing.' },
+  { icon: '🗂️', title: 'Themen automatisch gebündelt', body: 'Die KI gruppiert verwandte Meldungen zu Themen-Strängen, damit du den roten Faden siehst statt Einzelmeldungen. Du behältst die Kontrolle.' },
+  { icon: '📊', title: 'Trends auf einen Blick', body: 'Sieh, welche Themen gerade an Fahrt gewinnen, wie sich die Nachrichtendichte über die Zeit entwickelt und welche Art von Ereignissen dominiert.' },
+  { icon: '🔗', title: 'Immer mit Quelle', body: 'Jede Meldung verlinkt direkt zur Originalquelle — keine Blackbox. Du kannst jede KI-Einschätzung gegen die Primärquelle prüfen.' },
 ];
 
 const SIGNALS = [
@@ -77,11 +77,11 @@ export default function FeaturesPage() {
       <section className="lp-section">
         <div className="lp-wrap">
           <Reveal>
-            <span className="lp-kicker">KI-Klassifikation</span>
-            <h2 className="lp-h2">Jedes Signal sauber eingeordnet.</h2>
+            <span className="lp-kicker">Automatisch erkannt</span>
+            <h2 className="lp-h2">Du siehst sofort, <em className="lp-em-serif">was</em> passiert ist.</h2>
             <p className="lp-lead">
-              Die KI erkennt nicht nur die Relevanz (P1–P3), sondern auch die Art des Ereignisses —
-              so siehst du auf einen Blick, was passiert und wie wichtig es ist.
+              Die KI erkennt nicht nur, wie wichtig eine Meldung ist, sondern auch die Art des Ereignisses —
+              so weißt du auf einen Blick, ob es um Geld, ein Produkt oder eine neue Regel geht.
             </p>
           </Reveal>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 14, marginTop: 32 }}>

@@ -151,14 +151,14 @@ export default function HowItWorksPage() {
                 Gib deine Nische ein — sieh, was reinkommt.
               </h2>
               <p style={{ color: 'var(--ink-2)', fontSize: 15, marginTop: 10 }}>
-                Vorschau-Demo · echte Signale erhältst du nach der kostenlosen Anmeldung.
+                Vorschau-Demo · dein echtes Briefing erhältst du nach der kostenlosen Anmeldung.
               </p>
               <form className="lp-try-bar" onSubmit={run}>
                 <input className="lp-field" style={{ flex: 1 }} value={term}
                   onChange={(e) => setTerm(e.target.value)}
                   placeholder="z. B. Embedded Finance, Defense Tech, Wasserstoff …" />
                 <button type="submit" className="lp-btn lp-btn-primary" style={{ padding: '13px 24px' }}>
-                  {state === 'loading' ? 'KI analysiert …' : 'Signale anzeigen'}
+                  {state === 'loading' ? 'KI liest Quellen …' : 'Briefing erstellen'}
                 </button>
               </form>
 
