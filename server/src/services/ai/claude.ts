@@ -16,12 +16,23 @@ function getClient(): Anthropic {
 const DEFAULT_VARIANT = 'claude-sonnet-5';
 
 /**
+ * Die Modellkennung wird pro Nutzer gespeichert, nicht pro Anbieter. Beim
+ * Wechsel des Anbieters steht dort also noch die Kennung des vorherigen
+ * (z.B. "deepseek-v4-flash") — die Anthropic mit 404 ablehnt. Fremde Kennungen
+ * werden daher verworfen und der Standard verwendet, wie es Gemini und DeepSeek
+ * bereits handhaben.
+ */
+function resolveModel(variant?: string): string {
+  return variant && variant.startsWith('claude') ? variant : DEFAULT_VARIANT;
+}
+
+/**
  * Sends the classification prompt to Claude and returns the raw text response.
  * Retries on transient errors (e.g. 429) with exponential backoff.
  */
 export async function classifyWithClaude(prompt: string, variant?: string): Promise<string> {
   const anthropic = getClient();
-  const model = variant || DEFAULT_VARIANT;
+  const model = resolveModel(variant);
 
   return withRetry(async () => {
     const resp = await anthropic.messages.create({
