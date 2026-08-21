@@ -11,9 +11,9 @@ import { apiError } from '../lib/api';
 import { formatDateTime } from '../lib/labels';
 
 const DEFAULT_VARIANTS: Record<AiModel, string> = {
-  claude: 'claude-sonnet-4-20250514',
-  gemini: 'gemini-2.5-flash',
-  deepseek: 'deepseek-chat',
+  claude: 'claude-sonnet-5',
+  gemini: 'gemini-3.7-flash',
+  deepseek: 'deepseek-v4-flash',
 };
 const DAYS: { v: string; l: string }[] = [
   { v: 'monday', l: 'Montag' }, { v: 'tuesday', l: 'Dienstag' }, { v: 'wednesday', l: 'Mittwoch' },

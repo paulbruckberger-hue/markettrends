@@ -278,7 +278,7 @@ export const settings = pgTable('settings', {
   user_id: uuid('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
 
   ai_model: aiModelEnum('ai_model').notNull().default('claude'),
-  ai_model_variant: text('ai_model_variant').default('claude-sonnet-4-20250514'),
+  ai_model_variant: text('ai_model_variant').default('claude-sonnet-5'),
 
   telegram_chat_id: text('telegram_chat_id'),
   telegram_connected: boolean('telegram_connected').default(false),

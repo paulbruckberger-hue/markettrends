@@ -11,7 +11,9 @@ function getClient(): Anthropic {
   return client;
 }
 
-const DEFAULT_VARIANT = 'claude-sonnet-4-20250514';
+// Stand 2026-08: claude-sonnet-4-20250514 wurde abgeschaltet (HTTP 404).
+// Aktuelle IDs tragen keinen Datumszusatz mehr.
+const DEFAULT_VARIANT = 'claude-sonnet-5';
 
 /**
  * Sends the classification prompt to Claude and returns the raw text response.

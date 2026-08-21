@@ -1,7 +1,7 @@
 import { config } from '../../config';
 import { withRetry } from '../../lib/retry';
 
-const DEFAULT_VARIANT = 'gemini-2.5-flash';
+const DEFAULT_VARIANT = 'gemini-3.7-flash';
 
 function resolveModel(variant?: string): string {
   return variant && variant.startsWith('gemini') ? variant : DEFAULT_VARIANT;
@@ -26,9 +26,10 @@ export async function classifyWithGemini(prompt: string, variant?: string): Prom
       headers: { 'content-type': 'application/json', 'x-goog-api-key': config.geminiApiKey },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        // Gemini 2.5 counts "thinking" tokens against maxOutputTokens; without a
-        // budget cap, longer prompts can consume the whole budget and return empty
-        // text. thinkingBudget:0 keeps the full budget for the actual answer.
+        // Gemini rechnet "Thinking"-Tokens gegen maxOutputTokens; ohne Begrenzung
+        // können längere Prompts das gesamte Budget aufbrauchen und leeren Text
+        // liefern. thinkingBudget:0 hält das Budget für die eigentliche Antwort frei.
+        // Auch mit Gemini 3.x live geprüft (2026-08).
         generationConfig: { temperature: 0.2, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 0 } },
       }),
     });

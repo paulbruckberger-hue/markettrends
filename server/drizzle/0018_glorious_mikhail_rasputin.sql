@@ -1,0 +1,1 @@
+ALTER TABLE "settings" ALTER COLUMN "ai_model_variant" SET DEFAULT 'claude-sonnet-5';

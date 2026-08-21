@@ -1,7 +1,8 @@
 import { config } from '../../config';
 import { withRetry } from '../../lib/retry';
 
-const DEFAULT_VARIANT = 'deepseek-chat';
+// deepseek-chat wird nicht mehr gelistet (funktioniert aktuell noch als Alias).
+const DEFAULT_VARIANT = 'deepseek-v4-flash';
 
 function resolveModel(variant?: string): string {
   return variant && variant.startsWith('deepseek') ? variant : DEFAULT_VARIANT;
