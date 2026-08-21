@@ -25,6 +25,21 @@ function Protected({ children }: { children: ReactNode }) {
   return isLoggedIn() ? <>{children}</> : <Navigate to="/login" replace />;
 }
 
+/**
+ * Startseite: eingeloggte Nutzer landen in der App, alle anderen auf der
+ * Landingpage.
+ *
+ * Wichtig: Die Prüfung MUSS in einer eigenen Komponente stehen. Stünde sie
+ * direkt in der element-Property der Route, würde sie nur beim Rendern von
+ * <App/> ausgewertet — und App rendert bei einem Routenwechsel nicht neu
+ * (nur <Routes/> tut das). Nach dem Login käme dann weiterhin das veraltete
+ * Ergebnis „nicht eingeloggt" zum Zug und man landete wieder auf der
+ * Landingpage, statt in die App zu kommen.
+ */
+function Home() {
+  return isLoggedIn() ? <Navigate to="/feed" replace /> : <LandingPage />;
+}
+
 function AdminOnly({ children }: { children: ReactNode }) {
   const { data: me } = useMe();
   if (!isLoggedIn()) return <Navigate to="/login" replace />;
@@ -36,7 +51,7 @@ export default function App() {
   return (
     <Routes>
       {/* ── Public marketing pages ── */}
-      <Route path="/" element={isLoggedIn() ? <Navigate to="/feed" replace /> : <LandingPage />} />
+      <Route path="/" element={<Home />} />
       <Route path="/how-it-works" element={<HowItWorksPage />} />
       <Route path="/features" element={<FeaturesPage />} />
       <Route path="/pricing" element={<PricingPage />} />
