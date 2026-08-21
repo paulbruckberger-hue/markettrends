@@ -136,7 +136,10 @@ export default function DesktopShell() {
 
   // Interessen-Abfrage genau einmal nach der ersten Anmeldung (auch am Desktop —
   // hier wurde sie früher gar nicht gezeigt). Serverseitiges Flag steuert es.
-  if (me && !me.onboarding_completed) {
+  // Bewusst === false: nur wenn der Server die Einrichtung ausdrücklich als offen
+  // meldet. Bei einem noch unvollständigen Nutzerobjekt (fehlendes Feld) würde
+  // sonst bestehenden Nutzern nach dem Login erneut die Einrichtung erscheinen.
+  if (me && me.onboarding_completed === false) {
     const maxKeywords = me.entitlements?.unlimited ? null : (me.entitlements?.quota ?? 3);
     return <Onboarding maxKeywords={maxKeywords} onDone={() => completeOnboarding.mutate()} />;
   }

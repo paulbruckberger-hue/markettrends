@@ -63,7 +63,10 @@ export default function AppShell() {
 
   // Interessen-Abfrage erscheint genau einmal: solange das serverseitige Flag
   // onboarding_completed false ist. Danach nie wieder — geräteübergreifend.
-  if (me && !me.onboarding_completed) {
+  // Bewusst === false: nur wenn der Server die Einrichtung ausdrücklich als offen
+  // meldet. Bei einem noch unvollständigen Nutzerobjekt (fehlendes Feld) würde
+  // sonst bestehenden Nutzern nach dem Login erneut die Einrichtung erscheinen.
+  if (me && me.onboarding_completed === false) {
     const maxKeywords = me.entitlements?.unlimited ? null : (me.entitlements?.quota ?? 3);
     return <Onboarding maxKeywords={maxKeywords} onDone={() => completeOnboarding.mutate()} />;
   }

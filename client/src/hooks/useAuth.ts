@@ -19,6 +19,10 @@ export function useLogin() {
     onSuccess: (data) => {
       setToken(data.token);
       qc.setQueryData(['me'], data.user);
+      // Die Login-Antwort enthält nur id/username/role — ohne onboarding_completed,
+      // plan und entitlements. Ohne dieses Nachladen hielte die App das Onboarding
+      // für offen und zeigte bestehenden Nutzern erneut die Einrichtung.
+      qc.invalidateQueries({ queryKey: ['me'] });
     },
   });
 }
